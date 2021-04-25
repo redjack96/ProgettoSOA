@@ -41,7 +41,7 @@ typedef struct the_level {
     char *message;
     unsigned long size;
     struct rcu_head rcu;
-} tag_level __attribute__((aligned(32)));       // La sua dimensione e' proprio 32. Per risparmiare memoria evito di allineare a 64 B, al costo di false cache sharing per accessi concorrenti a 2 livelli vicini (ma non tutti)
+} tag_level;
 
 typedef struct my_tag_service {
     tag_level *level;
@@ -54,7 +54,7 @@ typedef struct my_tag_service {
     int awake_request;
     struct rcu_head tag_rcu;
     int lazy_deleted;                           // Impostato a YES quando si vuole eliminare tutto il tag. Tutte le istruzioni falliscono se e' impostato a YES
-} tag_service __attribute__((aligned(64)));     // La sua dimensione e' proprio 64 Bytes
+} tag_service;
 
 typedef struct my_ts_management {
     int first_free_entry;

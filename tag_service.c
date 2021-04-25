@@ -513,7 +513,6 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, 
         rcu_read_unlock();
         atomic_dec((atomic_t *) &ts->thread_waiting_message_count);
         atomic_dec((atomic_t *) &ts->level[level].thread_waiting);
-        // get_tag_status(ts->tag); // modifica dopo essere stato svegliato da un segnale...
         LOG("Ricevuto un segnale di terminazione");
         module_put(THIS_MODULE);
         return -EINTR; // Interrupted system call

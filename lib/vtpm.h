@@ -30,7 +30,7 @@
 #define ADDRESS_MASK 0xfffffffffffff000 // escludo l'offset fisico
 #define PT_ADDRESS_MASK 0x7ffffffffffff000 // escludo il bit più significativo e l'offset.
 #define VALID 0x1 // BIT DI PRESENZA PAGE TABLE ENTRY
-#define PAGE_TABLE_ADDRESS phys_to_virt(_read_cr3() & ADDRESS_MASK)
+#define PAGE_TABLE_ADDRESS __va(_read_cr3() & ADDRESS_MASK)
 #define LH_MAPPING 0x80 // Pagine Large/Huge
 // queste macro restituiscono l'indice corrispondente alla page table indicata di un indirizzo logico.
 #define PML4_indexof(addr) (((long long)(addr) >> 39) & 0x1ff) // indice pml4 nei bit 39-47 spostato nei 9 bit meno significativi.

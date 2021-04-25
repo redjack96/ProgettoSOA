@@ -52,13 +52,12 @@ long vtpmo(unsigned long vaddr) {
     // Ricavo l'indirizzo logico a partire dall'indirizzo fisico contenuto in .pgd. Escludo alcuni bit.
     pdp = __va((ulong) (pml4[PML4_indexof(target_address)].pgd) & PT_ADDRESS_MASK);
 
-    // AUDIT printk("%s: sto attraversando la page table PDP nell'elemento %lld\n", MODNAME, PDP_indexof(target_address));
-
     if ((ulong) (pdp[PDP_indexof(target_address)].pud) & VALID) { //.pud
         // la entry pdp relativa a vaddr è valida. Continua.
     } else {
         return NO_MAP;
     }
+
     // Ricavo l'indirizzo logico a partire dall'indirizzo fisico contenuto in .pud (pdp)
     pde = __va((ulong) (pdp[PDP_indexof(target_address)].pud) & PT_ADDRESS_MASK);
 
