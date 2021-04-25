@@ -1,4 +1,9 @@
 # Scambio dati basato su TAG service
+
+Leggi la [Relazione del progetto](Relazione Tag Based data exchange.pdf)
+
+---
+
 Implementare un sottosistema del kernel Linux che permette di scambiare messaggi tra thread.
 Il sottosistema per default ha 32 livelli, chiamati TAG, che devono essere gestiti tramite le seguenti system call:
     
