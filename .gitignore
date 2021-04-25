@@ -1,0 +1,16 @@
+# Project exclude paths
+/cmake-build-debug/
+*.out
+*.cmd
+*.mod.cmd
+*.mod.o.cmd
+*.o.cmd
+*.mod
+*.mod.c
+*.mod.o
+*.o
+*.ko
+*.symvers
+*.order
+*.elf
+*.o.d
