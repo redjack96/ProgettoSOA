@@ -1,6 +1,6 @@
 # Scambio dati basato su TAG service
 
-Leggi la [Relazione del progetto](Relazione Tag Based data exchange.pdf)
+Leggi la [Relazione del progetto](Relazione_Tag_Based_data_exchange.pdf)
 
 ---
 
