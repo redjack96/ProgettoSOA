@@ -17,6 +17,7 @@ int opening_only_owner_test7();
 int failing_opening_IPC_PRIVATE_test8();
 int failing_opening_nonexistent_service_test9();
 int device_file_existence_test10();
+int change_permission_during_send_test11();
 
 
 #endif //TAG_SERVICE_TAG_GET_TEST_H

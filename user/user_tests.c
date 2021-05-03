@@ -17,6 +17,7 @@ void testsuite_tag_get() {
     failing_opening_IPC_PRIVATE_test8();
     failing_opening_nonexistent_service_test9();
     device_file_existence_test10();
+    SUDO change_permission_during_send_test11();
 }
 
 void testsuite_tag_send() {
@@ -66,9 +67,10 @@ void all_tests() {
 int main() {
 
     printf("user=%d, effective user = %d\n", getuid(), geteuid());
-    all_tests();
+    // all_tests();
+    SUDO change_permission_during_send_test11();
 
-#define CHECK_DEVICE 1
+#define CHECK_DEVICE 0
 #if (CHECK_DEVICE == 1)
     int minuti = 1;
     printf("Test corretti fin'ora (%d/%d). Eseguo il test sul char device bloccante per %d minuti.\n", success, tests, minuti);
@@ -83,6 +85,6 @@ int main() {
     device_write_test5(4, minuti);
 #endif
 
-    printf("---------------------------\nTest riusciti: \t%d/%d\n---------------------------\n", success,tests);
+    printf("---------------------------\nTest riusciti: \t%d/%d\n---------------------------\n", success, tests);
     return 0;
 }

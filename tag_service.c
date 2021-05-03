@@ -365,19 +365,28 @@ __SYSCALL_DEFINEx(4, _tag_send, int, tag, int, level, char*, buffer, size_t, siz
         module_put(THIS_MODULE);
         return -EBADF; // bad file descriptor
     }
-
-    // L'Utente ha i permessi corretti ?
-    if (ts->owner_euid != EUID && ts->permission == ONLY_OWNER) {
-        free_pages((unsigned long) intermediate_buffer, 0);
-        ERR1("L'utente non dispone dei permessi per inviare messaggi dal tag service", tag);
-        module_put(THIS_MODULE);
-        return -EACCES; // Permission Denied
-    }
-
     /*
      * Inizio adesso con la sezione critica. Il buffer intermedio e' gia stato inizializzato con copy_from_user (preemptable)
      * perche' non ha bisogno di accedere al tag_service. Ora quando e' il suo turno, tag_send
      * copia con memcpy() il buffer intermedio nella struttura tag_service. Questo migliora le prestazioni.
+     *
+     * Fix: ora i permessi vengono controllati dopo aver preso il lock.
+     * Dato un tag service con descrittore x e permessi EVERYONE, se un thread A prova a inviare un messaggio,
+     * non e' possibile che un altro thread B (appartenente a un altro utente) che usa tag_ctl(x, REMOVE_TAG)
+     * e poi tag_get(x + k*MAX_TAG_SERVICES, CREATE_TAG, ONLY_OWNER), per k intero (0,1,2,...),
+     * nella concorrenza permetta ad A di inviare comunque pur appartenendo a un altro utente, perché:
+     * - se l'ordine di accesso al mutex è A - B:
+     *     A inizia la tag_send e controlla i permessi. B non puo' eliminare perche' deve attendere di acquisire il mutex
+     * - se l'ordine è B - A.
+     *     supponendo che non ci siano thread in attesa di ricevere, B esegue la tag_ctl(REMOVE_TAG) ed elimina il tag service
+     *     ora ci sono due possibilita' nell'accedere al mutex:
+     *      - Entra A con tag_send: B viene deschedulato e A non appena supera l'istruzione seguente scopre che il thread e' stato eliminato e rinuncia all'invio
+     *      - Entra B con CREATE_TAG e poi A va in esecuzione: il tag è stato ricreato, ma se non ha il permesso di accedere a esso, fallisce.
+     * Inoltre:
+     *  - non può accadere che remove, send e create siano concorrenti perche' prendono lo stesso mutex
+     *  - la tag_receive ha due possibilita rispetto alla tag send:
+     *     .. se arriva prima la send: nessuno riceve il messaggio e poi la receive rimane in attesa
+     *     .. se arriva prima la receive: questa va in attesa e riceve il messaggio non appena e' inviato
      */
     mutex_lock(&tsm.access_lock[tag]);
 
@@ -389,6 +398,16 @@ __SYSCALL_DEFINEx(4, _tag_send, int, tag, int, level, char*, buffer, size_t, siz
         module_put(THIS_MODULE);
         return -EBADF; // bad file descriptor
     }
+
+    // L'Utente ha i permessi corretti ?
+    if (ts->owner_euid != EUID && ts->permission == ONLY_OWNER) {
+        mutex_unlock(&tsm.access_lock[tag]);
+        free_pages((unsigned long) intermediate_buffer, 0);
+        ERR1("L'utente non dispone dei permessi per inviare messaggi dal tag service", tag);
+        module_put(THIS_MODULE);
+        return -EACCES; // Permission Denied
+    }
+
 
     // Non bloccante!!
     memcpy(ts->level[level].message, intermediate_buffer, real_size - not_copied);
@@ -505,6 +524,7 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, 
                              ts->level[level].message_ready == READY
                              || ts->awake_request == YES);
 
+    // Non c'e' bisogno di controllare per lazy_deleted == YES perche' essendoci ancora almeno un thread in ricezione, le eventuali REMOVE_TAG falliscono
     // non mi blocco, voglio solo leggere. Quando tutti hanno letto, permetto alla tag_receive di azzerare il messaggio
     rcu_read_lock();
 
