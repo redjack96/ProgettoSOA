@@ -17,7 +17,9 @@ void testsuite_tag_get() {
     failing_opening_IPC_PRIVATE_test8();
     failing_opening_nonexistent_service_test9();
     device_file_existence_test10();
-    SUDO change_permission_during_send_test11();
+    SUDO change_permission_during_send_test11(1); // impossibile inviare a un tag service eliminato
+    SUDO change_permission_during_send_test11(2); // impossibile inviare su un tag service reistanziato con permessi diversi
+    SUDO change_permission_during_send_test11(3); // tutto funziona
 }
 
 void testsuite_tag_send() {
@@ -68,7 +70,9 @@ int main() {
 
     printf("user=%d, effective user = %d\n", getuid(), geteuid());
     // all_tests();
-    SUDO change_permission_during_send_test11();
+    SUDO change_permission_during_send_test11(1);
+    SUDO change_permission_during_send_test11(2);
+    SUDO change_permission_during_send_test11(3);
 
 #define CHECK_DEVICE 0
 #if (CHECK_DEVICE == 1)

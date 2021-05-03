@@ -283,8 +283,9 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
 
                 if (ts->owner_euid != EUID && ts->permission == ONLY_OWNER) {
                     mutex_unlock(&tsm.access_lock[tag]);
-                    ERR1("L'utente non dispone dei permessi per accedere al tag service", tag);
-                    printk("permission = %s, owner_euid = %d, UID = %d, EUID = %d\n",
+                    ERR1("", tag);
+                    printk("%s: L'utente non dispone dei permessi per accedere al tag service %d, "
+                           "permission = %s, owner_euid = %d, UID = %d, EUID = %d\n", MODNAME, tag,
                            ts->permission == ONLY_OWNER ? "ONLY_OWNER" : "EVERYONE",
                            ts->owner_euid, UID, EUID);
                     module_put(THIS_MODULE);
@@ -330,7 +331,7 @@ __SYSCALL_DEFINEx(4, _tag_send, int, tag, int, level, char*, buffer, size_t, siz
     char *intermediate_buffer;
 
     try_module_get(THIS_MODULE);
-    printk("%s: il thread %d ha richiesto di eseguire tag_send con parametri tag=%d, livello=%d, size=%zu\n",
+    printk("%s: il thread %d esegue  tag_send con parametri tag=%d, livello=%d, size=%zu\n",
            MODNAME, current->pid, tag, level, size);
 
     if (tag < 0 || tag > MAX_TAG_SERVICES) {
@@ -589,7 +590,7 @@ __SYSCALL_DEFINEx(2, _tag_ctl, int, tag, int, command) {
     tag_service *ts; // se avessi usato il valore nello stack, mi darebbe il warning -Wframe-larger-than 1024 bytes
 
     try_module_get(THIS_MODULE);
-    printk("%s: il thread %d ha richiesto di eseguire tag_ctl con parametri tag=%d, command=%s\n",
+    printk("%s: il thread %d esegue  tag_ctl con parametri tag=%d, command=%s\n",
            MODNAME, current->pid, tag,
            command == REMOVE_TAG ? "REMOVE_TAG" : (command == AWAKE_ALL ? "AWAKE_ALL" : "UNKNOWN"));
 
