@@ -283,7 +283,6 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
 
                 if (ts->owner_euid != EUID && ts->permission == ONLY_OWNER) {
                     mutex_unlock(&tsm.access_lock[tag]);
-                    ERR1("", tag);
                     printk("%s: L'utente non dispone dei permessi per accedere al tag service %d, "
                            "permission = %s, owner_euid = %d, UID = %d, EUID = %d\n", MODNAME, tag,
                            ts->permission == ONLY_OWNER ? "ONLY_OWNER" : "EVERYONE",

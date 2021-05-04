@@ -374,6 +374,7 @@ int device_file_existence_test10() {
  *  3 - A invia il messaggio prima di B, allora tutte e tre le system call devono avere successo
  * @return
  */
+/*
 int change_permission_during_send_test11(int test) {
     long tag, frk, ret;
     int status;
@@ -410,7 +411,8 @@ int change_permission_during_send_test11(int test) {
 
         exit(EXIT_SUCCESS); // qui deve funzionare tutto
     } else {
-        if (test != 3) sleep(test); // aspetta la ctl se test = 1, aspetta anche la get se test = 2. Altrimenti non aspetta.
+        if (test != 3)
+            sleep(test); // aspetta la ctl se test = 1, aspetta anche la get se test = 2. Altrimenti non aspetta.
 
         ret = tag_send((int) tag, 0, "ciao", 5);
         if (ret == -1) {
@@ -419,36 +421,24 @@ int change_permission_during_send_test11(int test) {
                     ret = tag_get(100, OPEN_TAG, EVERYONE);
                     if (ret != -1) {
                         printf("change_permission_during_send_test11: Sono riuscito ad accedere a un tag service PUR NON AVENDO I PERMESSI!!!!!");
-                        // Poiche' in qualche modo sono riuscito ad accedere rimuovo il tag per tornare allo stato precedente
-                        if (tag_ctl((int) tag, REMOVE_TAG) == -1) {
-                            perror("change_permission_during_send_test11 GRAVE: impossibile eliminare il tag service dopo che sia tag_send che tag_get falliscono");
-//                            sem_post(sem11);
-                            FAILURE;
-                        }
-//                        sem_post(sem11);
-                        FAILURE;
+                        goto failure; // Poiche' in qualche modo sono riuscito ad accedere rimuovo il tag per tornare allo stato precedente
                     } else if (errno != EACCES) {
                         perror("change_permission_during_send_test11 GRAVE: non posso accedere al tag service, ma non perche' non ho i permessi...");
-//                        sem_post(sem11);
-                        FAILURE;
+                        seteuid(1001);
+                        goto failure;
                     }
                     break;
                 case EBADF: // siamo nel caso 2. Devo aspettarmi che il tag sia stato eliminato, quindi controllo che lo sia davvero
-                    if (tag_get(100, OPEN_TAG, EVERYONE) != -1) {
+                    ret = tag_get(100, OPEN_TAG, EVERYONE);
+                    if (ret != -1) {
                         printf("change_permission_during_send_test11: Sono riuscito ad accedere a un tag service  eliminato!!!!!");
-                        tag_ctl((int) tag, REMOVE_TAG);
-//                        sem_post(sem11);
-                        FAILURE;
+                        goto failure;
                     }
                     break;
                 default:
                     perror("change_permission_during_send_test11 (processo padre): errore nella tag send");
                     // NON SERVE CAMBIARE UTENTE: altrimenti sarei nel caso 1
-                    if (tag_ctl((int) tag, REMOVE_TAG)) { // elimino per ristabilire lo stato precedente.
-                        perror("change_permission_during_send_test11: errore grave impossibile eliminare dopo fallimento send");
-                    }
-//                    sem_post(sem11);
-                    FAILURE;
+                    goto failure;
             }
         }
 //        sem_post(sem11);
@@ -464,4 +454,172 @@ int change_permission_during_send_test11(int test) {
         }
     }
     SUCCESS;
+failure:
+    // FIXME: liberare i vari semafori prima di aspettare...
+    //  sem_post(sem11);
+    wait(&status);
+
+    if (tag_ctl((int) tag, REMOVE_TAG) == -1) {
+        perror("change_permission_during_send_test11 GRAVE: impossibile eliminare il tag service dopo che sia tag_send che tag_get falliscono");
+        FAILURE;
+    }
+    FAILURE;
+}
+*/
+
+
+int change_permission_during_send_test11(int test) {
+    long tag, frk, ret;
+    int status;
+
+    if (test != 1 && test != 2 && test != 3) test = 1;
+    sem_t *sem11;
+    sem_t *sem112;
+    tag = tag_get(100, CREATE_TAG, EVERYONE);
+    if (tag < 0) {
+        perror("change_permission_during_send_test11: tag_get");
+        FAILURE;
+    }
+
+    sem11 = sem_open("sem_11", O_CREAT, 0666, 0);
+    if(test == 2) sem112 = sem_open("sem_112", O_CREAT, 0666, 0);
+
+    frk = fork();
+    if (frk == -1) {
+        perror("change_permission_during_send_test11: errore nella fork");
+        FAILURE;
+    } else if (frk == 0) {
+
+        seteuid(1001); // <-------- funziona solo se ROOT
+
+        if(test == 1){
+            // vai avanti
+        } else if (test == 2){
+            // vai avanti
+//            sem_post(sem11); // aggiungi un gettone, ma non basta per far partire la send... Il gettone viene subito preso dalla send
+        } else {
+            sem_wait(sem11);
+        }
+
+        if (tag_ctl((int) tag, REMOVE_TAG) == -1) {
+            perror("change_permission_during_send_test11 (processo figlio): errore nella REMOVE_TAG");
+            exit(EXIT_FAILURE);
+        }
+
+        if(test == 1){
+            // vai avanti
+        } else if (test == 2){
+            sem_post(sem11); // permetti al processo padre di provare a inviare, ma poi aspetta che finisce l'invio
+            sem_wait(sem112); // aspetta la send
+        }
+
+
+        if (tag_get(100, CREATE_TAG, ONLY_OWNER) < 0) {
+            perror("change_permission_during_send_test11 (processo figlio): errore nella CREATE_TAG");
+            exit(EXIT_FAILURE);
+        }
+
+        if(test == 1){
+            sem_post(sem11); // Ho finito tutto ora tocca alla send
+        } else if(test == 2){
+            // non fare nulla, ci pensa il padre ad eliminare i semafori
+        } else {
+            // non fare nulla, ci pensa il padre ad eliminare i semafori
+        }
+
+        exit(EXIT_SUCCESS); // qui deve funzionare tutto
+    } else {
+
+        if(test == 1){
+            sem_wait(sem11); // aspetto REMOVE e CREATE prima di inviare
+        } else if (test == 2) {
+            sem_wait(sem11); // mi servono due gettoni per andare avanti..
+        } else {
+            // vai avanti
+        }
+
+        ret = tag_send((int) tag, 0, "ciao", 5);
+        if (ret == -1) {
+            switch (errno) { // nessuno deve ricevere
+                case EACCES: // siamo nel caso 1. Devo aspettarmi che il tag esista ma non mi faccia accedere perche' non ho i permessi
+                    ret = tag_get(100, OPEN_TAG, EVERYONE);
+                    if (ret != -1) {
+                        printf("change_permission_during_send_test11: Sono riuscito ad accedere a un tag service PUR NON AVENDO I PERMESSI!!!!!");
+                        goto failure; // Poiche' in qualche modo sono riuscito ad accedere rimuovo il tag per tornare allo stato precedente
+                    } else if (errno != EACCES) {
+                        perror("change_permission_during_send_test11 GRAVE: non posso accedere al tag service, ma non perche' non ho i permessi...");
+                        goto failure;
+                    }
+                    break;
+                case EBADF: // siamo nel caso 2. Devo aspettarmi che il tag sia stato eliminato, quindi controllo che lo sia davvero
+                    ret = tag_get(100, OPEN_TAG, EVERYONE);
+                    if (ret != -1) {
+                        printf("change_permission_during_send_test11: Sono riuscito ad accedere a un tag service  eliminato!!!!!");
+                        goto failure;
+                    }
+                    break;
+                default:
+                    perror("change_permission_during_send_test11 (processo padre): errore nella tag send");
+                    // NON SERVE CAMBIARE UTENTE: altrimenti sarei nel caso 1
+                    goto failure;
+            }
+        }
+        if(test == 1){
+            // non mi interessa quanti gettoni ha il semaphore... lo chiudo e basta
+            sem_unlink("sem_11"); // vedi /dev/shm per vedere se rimane li'
+            sem_close(sem11);
+        } else if(test == 2){
+            sem_post(sem112);
+        } else {
+            sem_post(sem11);
+        }
+
+//        sem_post(sem11);
+        wait(&status); // aspetto il processo figlio
+
+        if(test == 2){
+            sem_unlink("sem_11"); // vedi /dev/shm per vedere se rimane li'
+            sem_unlink("sem_112"); // vedi /dev/shm per vedere se rimane li'
+            sem_close(sem11);
+            sem_close(sem112);
+        } else if(test == 3){
+            sem_unlink("sem_11");
+            sem_close(sem11);
+        }
+
+        seteuid(1001); // qua serve cambiare utente... perche' il processo figlio ha creato un tag con utente 1001
+        if (tag_ctl((int) tag, REMOVE_TAG) == -1) { // elimino per ristabilire lo stato precedente.
+            perror("change_permission_during_send_test11: errore grave impossibile eliminare al termine del test");
+            FAILURE;
+        }
+        if (WEXITSTATUS(status) == EXIT_FAILURE) {
+            printf("change_permission_during_send_test11: il processo figlio ha fallito nella remove o nella create");
+            FAILURE;
+        }
+    }
+    SUCCESS;
+    failure:
+
+    if(test == 1){
+        sem_unlink("sem_11");
+        sem_close(sem11);
+    } else if(test == 2){
+        sem_unlink("sem_11"); // vedi /dev/shm per vedere se rimane li'
+        sem_unlink("sem_112"); // vedi /dev/shm per vedere se rimane li'
+        sem_close(sem11);
+        sem_close(sem112);
+    } else {
+        sem_unlink("sem_11");
+        sem_close(sem11);
+    }
+
+    // FIXME: liberare i vari semafori prima di aspettare...
+    //  sem_post(sem11);
+    wait(&status);
+    seteuid(1001);
+    if (tag_ctl((int) tag, REMOVE_TAG) == -1) {
+        perror("change_permission_during_send_test11 GRAVE: impossibile eliminare il tag service dopo che sia tag_send che tag_get falliscono");
+        FAILURE;
+    }
+    FAILURE;
 }
