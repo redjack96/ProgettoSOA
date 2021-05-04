@@ -620,11 +620,9 @@ int signal_test6() {
     } else if (pid == 0){
         char buffer[16];
 
-        sem = sem_open("semaforo6", O_CREAT, 0666, 0);
-
         sem_post(sem);
+
         ret = tag_receive((int) (long) tag, 0, buffer, 0);
-        sem_close(sem);
         if (ret < 0 && errno == EINTR) {
             return EXIT_SUCCESS;
         }
@@ -636,8 +634,9 @@ int signal_test6() {
 
         wait(&returns);
 
+        sem_unlink("semaforo6");
         sem_close(sem);
-        sem_destroy(sem);
+
         if (tag_ctl((int) tag, REMOVE_TAG) < 0) {
             perror("signal_test6: tag_ctl ");
             FAILURE;
