@@ -13,5 +13,6 @@ int multiple_receive_different_level_test3(int thread_number);
 int multiple_receive_different_tag_same_level_test4(int thread_number);
 int device_write_test5(int thread_number, int minuti);
 int signal_test6();
+int chrdev_read_performance_test7();
 
 #endif //TAG_SERVICE_TAG_RECEIVE_TEST_H

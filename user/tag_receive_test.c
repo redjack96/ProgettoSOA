@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <syscall.h>
+#include <sys/time.h>
 #include "tag_receive_test.h"
 
 #define OK (void *) 1
@@ -650,4 +651,77 @@ int signal_test6() {
         FAILURE;
     }
 
+}
+
+FILE * perfFile;
+int fd;
+
+/**
+ * Media 1.7 con fgetc
+ * Media 1.3 con read
+ */
+void performanceReadCharDev(){
+
+    char ch[1];
+
+    //while ((ch = fgetc(perfFile)) != EOF);
+    while (read(fd, ch, 1) != 0); // 0 coincide con EOF
+
+}
+
+int chrdev_read_performance_test7(){
+    struct timeval t0, t1;
+    unsigned int i;
+    int times = 52429;
+    int key = 207;
+    double results[times];
+    double sum = 0.0;
+    double average;
+    long tag;
+
+    if((tag = tag_get(key, CREATE_TAG, EVERYONE)) == -1){
+        perror("chrdev_read_performance_test7: errore nella tag_get");
+        FAILURE;
+    }
+
+    int retry = 0;
+    char *path = "/dev/tsdev_207";
+    /* Il seguente ciclo serve per aspettare che i permessi del char device siano effettivamente cambiati */
+    do {
+        if (retry) sleep(1);
+        retry = access(path, R_OK);
+    } while (retry == -1);
+
+    perfFile = fopen(path, "r");
+    fd = fileno(perfFile);
+
+    if (perfFile == NULL) {
+        printf("Impossibile aprire il file a causa dei permessi...\n");
+        return -1;
+    }
+
+    for(i = 0; i < times; i++){
+        rewind(perfFile); // Riparto da 0 con il cursore
+        gettimeofday(&t0, NULL);
+
+        performanceReadCharDev(); // media 1.7 s dopo 100000 run
+
+        gettimeofday(&t1, NULL);
+        results[i] = (double) t1.tv_sec - t0.tv_sec + 1E-6 * ((double) t1.tv_usec - t0.tv_usec);
+        sum += results[i];
+    }
+
+    average = sum/(double)times;
+
+    printf("Tempo impiegato in media dopo %d chiamate %.2g secondi (totale = %.2g s)\n", times, average, sum);
+
+    fclose(perfFile);
+
+    if(tag_ctl((int) tag, REMOVE_TAG) == -1){
+        perror("chrdev_read_performance_test7: errore nella tag_ctl");
+        FAILURE;
+    }
+
+
+    SUCCESS;
 }

@@ -43,9 +43,9 @@ int my_dev_uevent(struct device *dev, struct kobj_uevent_env *env) {
  * @param ts tag_service da leggere
  * @return stringa cosi' formata: KEY EUID LEVEL #THREADS
  */
-char *get_tag_status(tag_service *ts) {
+char *get_tag_status(tag_service *ts, char * buffer) {
     int i;
-    char *buffer = kmalloc(4096 * sizeof(char), GFP_KERNEL);
+
     char bufferino[100];
 
     strcpy(buffer, "KEY\tEUID\tLEVEL\t#THREADS\n");
@@ -115,17 +115,23 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
 
     tag_service *ts = (tag_service *) filp->private_data;
 
+
+    ts_status = kmalloc(4096 * sizeof(char), GFP_KERNEL);
     // Costruisco la stringa da restituire all'utente
-    ts_status = get_tag_status(ts);
+    get_tag_status(ts, ts_status);
+
     size = strlen(ts_status);
 
     // Se si usa 'less -f tsdev_#' e non legge tutto in una volta, e' possibile che non riesce ad andare piu' avanti se impediamo ulteriori letture...
-    if (mutex_lock_killable(&dm->device_lock[ts->tag]))
+    if (mutex_lock_killable(&dm->device_lock[ts->tag])){
+        kfree(ts_status);
         return -EINTR;
+    }
 
     // Se arriviamo a EOF con la lettura, abbiamo finito di leggere quindi esco.
     if (*f_pos >= size) {
         mutex_unlock(&dm->device_lock[ts->tag]);
+        kfree(ts_status);
         return 0; // EOF
     }
 
@@ -141,6 +147,7 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
     /* Creo il buffer con tutti i dati e lo invio all'utente per potergli far leggere lo stato del tag service */
     if (copy_to_user(buf, ts_status, count) != 0) {
         mutex_unlock(&dm->device_lock[ts->tag]);
+        kfree(ts_status);
         printk("%s: Impossibile leggere tutti i dati del char device tsdev_%d", MODNAME, ts->tag);
         return -EFAULT;
     }
@@ -150,6 +157,7 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
     retval = count;
 
     mutex_unlock(&dm->device_lock[ts->tag]);
+    kfree(ts_status);
     return retval;
 }
 
