@@ -45,7 +45,7 @@ void testsuite_tag_ctl() {
     remove_send_create_concurrent_test6(4); // provato con 30 thread e funziona
     repeated_failed_remove7();
     awake_multiple_tag_test8();
-    // Importante questi ultimi tre test vanno eseguiti per ultimi perche cambiano utente...
+    // Importante: questi ultimi tre test vanno eseguiti per ultimi perche cambiano utente...
     SUDO change_permission_during_send_test9(1); // impossibile inviare a un tag service eliminato
     SUDO change_permission_during_send_test9(2); // impossibile inviare su un tag service reistanziato con permessi diversi
     SUDO change_permission_during_send_test9(3); // tutto funziona
@@ -73,7 +73,7 @@ int main() {
     all_tests();
 
 
-#define CHECK_DEVICE 0
+#define CHECK_DEVICE 1
 #if (CHECK_DEVICE == 1)
     int minuti = 1;
     printf("Test corretti fin'ora (%d/%d). Eseguo il test sul char device bloccante per %d minuti.\n", success, tests, minuti);
