@@ -24,5 +24,7 @@ void ts_destroy_char_device_file(int minor_tag);
 
 void destroy_driver_and_all_devices(void);
 
+void change_epoch(int tag_minor);
+
 
 #endif //TAG_SERVICE_TAG_DEVICE_DRIVER_H
