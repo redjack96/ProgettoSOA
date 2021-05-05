@@ -268,9 +268,11 @@ int ts_create_char_device_file(int tag_minor) {
 
     // Se tutto va a buon fine, inizializzo la struttura dati:
     dm->content[tag_minor] = kmalloc(4096 * sizeof(char), GFP_KERNEL);
+/*
     dm->epoch[tag_minor] = 0; // Imposto l'epoca a 0
     dm->standing_readers[tag_minor][0] = 0L; // Imposto a 0 gli standing reader dell'epoca 0
     dm->standing_readers[tag_minor][0] = 0L; // Imposto a 0 gli standing reader dell'epoca 1
+*/
     asm volatile ("mfence");
 
 
