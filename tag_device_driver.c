@@ -71,7 +71,7 @@ char *get_tag_status(tag_service *ts) {
 //    int i;
 //    int my_epoch;
 //    char line[100];
-    char * buffer;
+    char *buffer;
     preempt_disable();
     // my_epoch = dm->epoch[ts->tag];
     buffer = dm->content[ts->tag];
@@ -393,7 +393,7 @@ void change_epoch(int tag_minor) {
 //    int temp;
     int i;
     char line[100];
-    tag_service * ts;
+    tag_service *ts;
 
     ts = tsm->all_tag_services[tag_minor];
 
@@ -403,7 +403,7 @@ void change_epoch(int tag_minor) {
     temp %= 2;
     dm->epoch[tag_minor] = temp;*/
 
-
+    memset(dm->content[ts->tag], 0, 4096 * sizeof(char));
     strcpy(dm->content[ts->tag], "KEY\tEUID\tLEVEL\t#THREADS\n");
     for (i = 0; i < MAX_LEVELS; i++) {
         sprintf(line, "%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i, ts->level[i].thread_waiting);
