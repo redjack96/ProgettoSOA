@@ -34,7 +34,7 @@ void testsuite_tag_receive() {
     multiple_receive_different_tag_same_level_test4(3);
     device_write_test5(4, 0);
     signal_test6();
-    chrdev_read_performance_test7();
+    chrdev_read_performance_test7(10);
 }
 
 void testsuite_tag_ctl() {
@@ -73,8 +73,8 @@ int main() {
 
     printf("user=%d, effective user = %d\n", getuid(), geteuid());
     // all_tests();
-    chrdev_read_performance_test7();
-
+//    chrdev_read_performance_test7(100000);
+    chrdev_rw_test8(1);
 
 #define CHECK_DEVICE 0
 #if (CHECK_DEVICE == 1)

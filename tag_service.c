@@ -763,7 +763,6 @@ void end(void) {
     // Dealloco gli eventuali tag service rimasti in memoria...
     for (i = 0; i < MAX_TAG_SERVICES; i++) {
         if (tsm.all_tag_services[i]) {
-            //TODO: deallocare anche livelli e messaggi dei livelli di ogni tag service allocato...
             for(lev = 0; lev < MAX_LEVELS; lev++){
                 kfree(tsm.all_tag_services[i]->level[lev].message);
             }
