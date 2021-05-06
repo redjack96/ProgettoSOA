@@ -68,13 +68,14 @@ int my_dev_uevent(struct device *dev, struct kobj_uevent_env *env) {
  * @return
  */
 void get_tag_status(tag_service *ts, char *ts_status) {
+    char *pointer;
+    //mutex_lock(&dm->device_lock[ts->tag]);
 
-    mutex_lock(&dm->device_lock[ts->tag]);
-
-    memcpy(ts_status, dm->content[ts->tag], 4096); // non bloccante
+    pointer = rcu_dereference(dm->content[ts->tag]);
+    memcpy(ts_status, pointer, 4096); // non bloccante
     asm volatile ("mfence");
 
-    mutex_unlock(&dm->device_lock[ts->tag]);
+    //mutex_unlock(&dm->device_lock[ts->tag]);
 
 }
 
@@ -139,11 +140,11 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
 
     // Recupero o costruisco la stringa da restituire all'utente
     // get_tag_status(ts->tag, ts_status);
-    // rcu_read_lock(); // internamente chiama preempt_disable
+    rcu_read_lock(); // internamente chiama preempt_disable
 
     get_tag_status(ts, ts_status);
 
-    // rcu_read_unlock(); // internamente chiama preempt_enable
+    rcu_read_unlock(); // internamente chiama preempt_enable
 
     // dm->content[ts->tag] e' allocato durante la creazione del char device
     // ed e' deallocato durante l'eliminazione del char device
@@ -396,7 +397,7 @@ void change_epoch(int tag_minor) {
     size_t size;
     char line[100];
     tag_service *ts;
-    char * newBuffer;
+    char *newBuffer;
     char *header = "KEY\tEUID\tLEVEL\t#THREADS\n";
     ts = tsm->all_tag_services[tag_minor];
 //    for_each_online_cpu(cpu) run_on(cpu);
@@ -425,7 +426,8 @@ void change_epoch(int tag_minor) {
 
     kfree(dm->content[ts->tag]);
 
-    dm->content[ts->tag] = newBuffer;
+    // dm->content[ts->tag] = newBuffer;
+    rcu_assign_pointer(dm->content[ts->tag], newBuffer);
 
     mutex_unlock(&dm->device_lock[ts->tag]);
 
