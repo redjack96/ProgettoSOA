@@ -134,12 +134,14 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
 
     // Recupero o costruisco la stringa da restituire all'utente
     // get_tag_status(ts->tag, ts_status);
-    rcu_read_lock(); // internamente chiama preempt_disable
+    // rcu_read_lock(); // internamente chiama preempt_disable
+    mutex_lock(&dm->device_lock[ts->tag]);
 
     memcpy(ts_status, dm->content[ts->tag], 4096); // non bloccante
     asm volatile ("mfence");
 
-    rcu_read_unlock(); // internamente chiama preempt_enable
+    mutex_unlock(&dm->device_lock[ts->tag]);
+    // rcu_read_unlock(); // internamente chiama preempt_enable
 
     // dm->content[ts->tag] e' allocato durante la creazione del char device
     // ed e' deallocato durante l'eliminazione del char device
@@ -399,7 +401,7 @@ void change_epoch(int tag_minor) {
     temp += 1;
     temp %= 2;
     dm->epoch[tag_minor] = temp;*/
-
+    // FIXME: Questo non basta... a volte vengono scritti in disordine
     mutex_lock(&dm->device_lock[ts->tag]);
 
     memset(dm->content[ts->tag], 0, 4096 * sizeof(char));
