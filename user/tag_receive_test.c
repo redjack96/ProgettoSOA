@@ -657,14 +657,11 @@ FILE * perfFile;
 int fd;
 
 /**
- * Media 1.7 con fgetc
- * Media 1.3 con read
+ * Media 1.2 * 10^-5 secondi con read
  */
 void performanceReadCharDev(){
 
     char ch[1];
-
-    //while ((ch = fgetc(perfFile)) != EOF);
     while (read(fd, ch, 1) != 0); // 0 coincide con EOF
 
 }
@@ -672,7 +669,7 @@ void performanceReadCharDev(){
 int chrdev_read_performance_test7(){
     struct timeval t0, t1;
     unsigned int i;
-    int times = 52429;
+    int times = 100000;
     int key = 207;
     double results[times];
     double sum = 0.0;

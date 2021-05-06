@@ -24,7 +24,10 @@ static ts_management *tsm;      // Copia del puntatore in tag_service.c: static 
 
 typedef struct my_dev_manager {
     struct cdev cdev[MAX_TAG_SERVICES];
-    struct mutex device_lock[MAX_TAG_SERVICES];
+    struct mutex device_lock[MAX_TAG_SERVICES]; // Un thread che vuole modificare la stringa deve aspettare tutti gli standing readers...
+    char *content[MAX_TAG_SERVICES]; // la stringa salvata per una epoca ... non puo' essere modificata finche' tutti non hanno letto
+    unsigned long standing_readers[MAX_TAG_SERVICES][2]; // righe, colonne: per ogni tag_service, il numero di lettori rimasti nell'epoca 0 o 1.
+    int epoch[MAX_TAG_SERVICES]; // un array di epoche, ciascuna puo' essere 0 o 1
 } dev_manager;
 
 dev_manager *dm;
@@ -43,7 +46,7 @@ int my_dev_uevent(struct device *dev, struct kobj_uevent_env *env) {
  * @param ts tag_service da leggere
  * @return stringa cosi' formata: KEY EUID LEVEL #THREADS
  */
-char *get_tag_status(tag_service *ts, char * buffer) {
+char *get_tag_status(tag_service *ts, char *buffer) {
     int i;
 
     char bufferino[100];
@@ -52,7 +55,6 @@ char *get_tag_status(tag_service *ts, char * buffer) {
     for (i = 0; i < MAX_LEVELS; i++) {
         sprintf(bufferino, "%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i, ts->level[i].thread_waiting);
         strcat(buffer, bufferino);
-        memset(bufferino, 0, strlen(bufferino));
     }
     buffer[strlen(buffer)] = '\0';
     return buffer;
@@ -123,7 +125,7 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
     size = strlen(ts_status);
 
     // Se si usa 'less -f tsdev_#' e non legge tutto in una volta, e' possibile che non riesce ad andare piu' avanti se impediamo ulteriori letture...
-    if (mutex_lock_killable(&dm->device_lock[ts->tag])){
+    if (mutex_lock_killable(&dm->device_lock[ts->tag])) {
         kfree(ts_status);
         return -EINTR;
     }
@@ -238,6 +240,15 @@ int ts_create_char_device_file(int tag_minor) {
         cdev_del(&dm->cdev[tag_minor]); // dealloca la struttura cdev con i metadati del nodo di I/O
         return err;
     }
+
+    // Se tutto va a buon fine, inizializzo la struttura dati:
+    dm->content[tag_minor] = kmalloc(4096 * sizeof(char), GFP_KERNEL);
+    dm->epoch[tag_minor] = 0; // Imposto l'epoca a 0
+    dm->standing_readers[tag_minor][0] = 0L; // Imposto a 0 gli standing reader dell'epoca 0
+    dm->standing_readers[tag_minor][0] = 0L; // Imposto a 0 gli standing reader dell'epoca 1
+    asm volatile ("mfence");
+
+
     mutex_unlock(&dm->device_lock[tag_minor]);
     return 0;
 }
@@ -253,6 +264,10 @@ void ts_destroy_char_device_file(int tag_minor) {
     mutex_lock(&dm->device_lock[tag_minor]);
     device_destroy(ts_class, MKDEV(ts_major, tag_minor));
     cdev_del(&dm->cdev[tag_minor]); // pulisce i metadati del device file (nodo di I/O)
+
+    // Non serve aspettare che finiscano i lettori perche' elimino (tag_ctl) il char device solo se non ci sono lettori (tag_receive) in attesa e se il modulo kenrnel non è bloccato!!!
+    // non posso eliminare un tag service e quindi il char device se ci sono lettori in attesa!!!
+    kfree(dm->content[tag_minor]); // Libero la memoria del buffer corretto
     mutex_unlock(&dm->device_lock[tag_minor]);
 
 }
@@ -338,4 +353,20 @@ void destroy_driver_and_all_devices(void) {
     kfree(dm);
 
     printk("%s: Hai disinstallato con successo il device driver con MAJOR %d\n", MODNAME, ts_major);
+}
+
+/**
+ * permette di cambiare epoca per sincronizzare i lettori del char device.
+ * - TODO: Viene chiamata da tag_get quando crea il tag_service
+ * - TODO: Viene chiamata da tag_receive quando un thread entra o esce dall'attesa.
+ * @param tag_minor quale tag service/char device cambiare epoca
+ */
+void change_epoch(int tag_minor) {
+
+    int temp;
+    temp = dm->epoch[tag_minor];
+    temp += 1;
+    temp %= 2;
+    dm->epoch[tag_minor] = temp;
+    asm volatile ("mfence");
 }

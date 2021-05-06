@@ -141,6 +141,7 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
 #endif
     int tag;
     int lev;
+    int lev_created;
     tag_service *ts;
 
     printk("%s: il thread %d esegue tag_get con key=%d, command=%s, permission=%s\n",
@@ -245,6 +246,7 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
                     ERR1("Impossibile allocare spazio per i messaggi del tag", tag);
                     goto fail_no_mem;
                 }
+                lev_created++;
             }
 
             // aggiungo il tag_service all'array di tutti i tag_services.
@@ -266,6 +268,11 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
             module_put(THIS_MODULE);
             return tag;
         fail_no_mem:
+            for(lev = 0; lev < lev_created; lev++){
+                kfree(ts->level[lev].message); // messaggi dei livelli
+            }
+            kfree(ts->level); // livelli
+            kfree(ts);
             module_put(THIS_MODULE);
             return -ENOMEM;
         case OPEN_TAG:
@@ -739,14 +746,19 @@ int start(void) {
  * ripristina la tabella delle system call allo stato precedente al montaggio.
  */
 void end(void) {
-    int i;
+    int i,lev;
     LOG(" -------------------- Disinstallazione in corso --------------------");
     // distruggo il device driver (utilizza l'array tsm).
     destroy_driver_and_all_devices();
 
+
     // Dealloco gli eventuali tag service rimasti in memoria...
     for (i = 0; i < MAX_TAG_SERVICES; i++) {
         if (tsm.all_tag_services[i]) {
+            for(lev = 0; lev < MAX_LEVELS; lev++){
+                kfree(tsm.all_tag_services[i]->level[lev].message);
+            }
+            kfree(tsm.all_tag_services[i]->level);
             kfree(tsm.all_tag_services[i]);
             LOG1("Eliminato tag_service", i);
         }
