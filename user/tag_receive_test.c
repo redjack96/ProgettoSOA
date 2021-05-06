@@ -653,7 +653,7 @@ int fd;
 
 /**
  * Ricostruendo la stringa a ogni lettura: Media 1.2 e-05 secondi con read
- * Con RCU preemption: 7.2 e-07 / 6.7 e-07 / 6.8 e-07
+ * Con RCU : 7 e-07, 7.3 e-07, 6.8 e-07
  */
 void performanceReadCharDev() {
 
