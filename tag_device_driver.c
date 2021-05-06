@@ -184,7 +184,7 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
     retval = count;
 
     mutex_unlock(&dm->device_lock[ts->tag]);
-    kfree(ts_status);
+    // kfree(ts_status);
     return retval;
 }
 

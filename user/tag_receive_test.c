@@ -669,7 +669,7 @@ void performanceReadCharDev(){
 int chrdev_read_performance_test7(){
     struct timeval t0, t1;
     unsigned int i;
-    int times = 100000;
+    int times = 10;
     int key = 207;
     double results[times];
     double sum = 0.0;
