@@ -44,7 +44,7 @@ int my_dev_uevent(struct device *dev, struct kobj_uevent_env *env) {
 
 /**
  * Costruisce la stringa da restituire quando si legge questo char device...
- * @param tag_minor tag_service da leggere
+ * @param ts tag_service da leggere
  * @return stringa cosi' formata: KEY EUID LEVEL #THREADS
  */
 /*char *get_tag_status(tag_service *ts, char *buffer) {
@@ -64,12 +64,17 @@ int my_dev_uevent(struct device *dev, struct kobj_uevent_env *env) {
  * Se l'epoca non e' cambiata, legge e basta.
  * Se l'epoca e' cambiata, invece deve scrivere.
  * L'epoca cambia quando cambia il numero di thread in attesa in qualsiasi livello.
- * @param tag_minor
+ * @param ts
  * @return
  */
-void get_tag_status(int tag_minor, char *ts_status) {
+void get_tag_status(tag_service *ts, char *ts_status) {
 
+    mutex_lock(&dm->device_lock[ts->tag]);
 
+    memcpy(ts_status, dm->content[ts->tag], 4096); // non bloccante
+    asm volatile ("mfence");
+
+    mutex_unlock(&dm->device_lock[ts->tag]);
 
 }
 
@@ -135,12 +140,9 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
     // Recupero o costruisco la stringa da restituire all'utente
     // get_tag_status(ts->tag, ts_status);
     // rcu_read_lock(); // internamente chiama preempt_disable
-    mutex_lock(&dm->device_lock[ts->tag]);
 
-    memcpy(ts_status, dm->content[ts->tag], 4096); // non bloccante
-    asm volatile ("mfence");
+    get_tag_status(ts, ts_status);
 
-    mutex_unlock(&dm->device_lock[ts->tag]);
     // rcu_read_unlock(); // internamente chiama preempt_enable
 
     // dm->content[ts->tag] e' allocato durante la creazione del char device
@@ -390,27 +392,40 @@ void destroy_driver_and_all_devices(void) {
 void change_epoch(int tag_minor) {
 
 //    int temp;
-    int i;
+    int i, written;
+    size_t size;
     char line[100];
     tag_service *ts;
-
+    char * newBuffer;
+    char *header = "KEY\tEUID\tLEVEL\t#THREADS\n";
     ts = tsm->all_tag_services[tag_minor];
+//    for_each_online_cpu(cpu) run_on(cpu);
+
 
     /*temp = dm->epoch[tag_minor];
     dm->prev_epoch[tag_minor] = temp;
     temp += 1;
     temp %= 2;
     dm->epoch[tag_minor] = temp;*/
+
+
+    newBuffer = kmalloc(4096 * sizeof(char), GFP_KERNEL);
+
     // FIXME: Questo non basta... a volte vengono scritti in disordine
     mutex_lock(&dm->device_lock[ts->tag]);
 
-    memset(dm->content[ts->tag], 0, 4096 * sizeof(char));
-    strcpy(dm->content[ts->tag], "KEY\tEUID\tLEVEL\t#THREADS\n");
+    size = strlen(header);
+    strncpy(newBuffer, header, size);
     for (i = 0; i < MAX_LEVELS; i++) {
-        sprintf(line, "%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i, ts->level[i].thread_waiting);
-        strcat(dm->content[ts->tag], line);
+        written = sprintf(line, "%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i, ts->level[i].thread_waiting);
+        size += written;
+        strcat(newBuffer, line);
     }
-    dm->content[ts->tag][strlen(dm->content[ts->tag])] = '\0';
+    newBuffer[size] = '\0';
+
+    kfree(dm->content[ts->tag]);
+
+    dm->content[ts->tag] = newBuffer;
 
     mutex_unlock(&dm->device_lock[ts->tag]);
 
