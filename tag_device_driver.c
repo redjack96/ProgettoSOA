@@ -44,7 +44,7 @@ int my_dev_uevent(struct device *dev, struct kobj_uevent_env *env) {
 
 /**
  * Costruisce la stringa da restituire quando si legge questo char device...
- * @param ts tag_service da leggere
+ * @param tag_minor tag_service da leggere
  * @return stringa cosi' formata: KEY EUID LEVEL #THREADS
  */
 /*char *get_tag_status(tag_service *ts, char *buffer) {
@@ -64,23 +64,13 @@ int my_dev_uevent(struct device *dev, struct kobj_uevent_env *env) {
  * Se l'epoca non e' cambiata, legge e basta.
  * Se l'epoca e' cambiata, invece deve scrivere.
  * L'epoca cambia quando cambia il numero di thread in attesa in qualsiasi livello.
- * @param ts
+ * @param tag_minor
  * @return
  */
-char *get_tag_status(tag_service *ts) {
-//    int i;
-//    int my_epoch;
-//    char line[100];
-    char *buffer;
-    preempt_disable();
-    // my_epoch = dm->epoch[ts->tag];
-    buffer = dm->content[ts->tag];
-    asm volatile ("mfence");
-    preempt_enable();
-    return buffer;
+void get_tag_status(int tag_minor, char *ts_status) {
 
 
-//    return dm->content[ts->tag];
+
 }
 
 /**
@@ -140,25 +130,32 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
     tag_service *ts = (tag_service *) filp->private_data;
 
 
-//    ts_status = kmalloc(4096 * sizeof(char), GFP_KERNEL);
+    ts_status = kmalloc(4096 * sizeof(char), GFP_KERNEL);
 
     // Recupero o costruisco la stringa da restituire all'utente
-    ts_status = get_tag_status(ts);
-    // allocato durante la creazione del char device
-    // deallocato durante l'eliminazione del char device
+    // get_tag_status(ts->tag, ts_status);
+    rcu_read_lock(); // internamente chiama preempt_disable
+
+    memcpy(ts_status, dm->content[ts->tag], 4096); // non bloccante
+    asm volatile ("mfence");
+
+    rcu_read_unlock(); // internamente chiama preempt_enable
+
+    // dm->content[ts->tag] e' allocato durante la creazione del char device
+    // ed e' deallocato durante l'eliminazione del char device
 
     size = strlen(ts_status);
 
     // Se si usa 'less -f tsdev_#' e non legge tutto in una volta, e' possibile che non riesce ad andare piu' avanti se impediamo ulteriori letture...
     if (mutex_lock_killable(&dm->device_lock[ts->tag])) {
-//        kfree(ts_status);
+        kfree(ts_status);
         return -EINTR;
     }
 
     // Se arriviamo a EOF con la lettura, abbiamo finito di leggere quindi esco.
     if (*f_pos >= size) {
         mutex_unlock(&dm->device_lock[ts->tag]);
-//        kfree(ts_status);
+        kfree(ts_status);
         return 0; // EOF
     }
 
@@ -174,7 +171,7 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
     /* Creo il buffer con tutti i dati e lo invio all'utente per potergli far leggere lo stato del tag service */
     if (copy_to_user(buf, ts_status, count) != 0) {
         mutex_unlock(&dm->device_lock[ts->tag]);
-//        kfree(ts_status);
+        kfree(ts_status);
         printk("%s: Impossibile leggere tutti i dati del char device tsdev_%d", MODNAME, ts->tag);
         return -EFAULT;
     }
@@ -184,7 +181,7 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
     retval = count;
 
     mutex_unlock(&dm->device_lock[ts->tag]);
-    // kfree(ts_status);
+    kfree(ts_status);
     return retval;
 }
 

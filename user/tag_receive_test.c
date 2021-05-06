@@ -723,11 +723,13 @@ int chrdev_read_performance_test7(int times) {
 }
 
 #define BUFSIZE 2048
+int remaining_senders = 0;
 
-void copyFile(char *source, char *destination) {
+void copyFile(char *source, char *destination, int i) {
     /// size = numero di caratteri letti
     int size;
     char buffer[BUFSIZE];
+    char string[60];
     int sd, dd; // source descriptor, destination descriptor.
     int written;
 
@@ -739,13 +741,12 @@ void copyFile(char *source, char *destination) {
         exit(1); //si chiudono tutti i canali di I/O e le sessioni.
     }
 
-    /* Creiamo o apriamo il file destinazione. Se esiste scrive dalla fine. Creato canale C' e sessione S'*/
-    dd = open(destination, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    /* Apriamo il file destinazione (esiste gia') e scrive dalla fine. Creato canale C' e sessione S'*/
+    dd = open(destination, O_CREAT | O_WRONLY | O_APPEND, 0666);
     if (dd == -1) {
         perror("Errore nell'apertura del file di desetinazione");
         exit(1);
     }
-
 
     /* Copia */
     do {
@@ -765,8 +766,8 @@ void copyFile(char *source, char *destination) {
         }
         //CONTROLLARE CHE QUELLO CHE HAI SCRITTO SIA UGUALE A QUELLO CHE HAI LETTO.
     } while (size > 0); //read ritorna 0 solo se arriviamo in fondo allo stream. (EOF)
-
-    write(dd, "---------------------------------\n", 34);
+    sprintf(string, "-------------[Fine thread %d]-------------\n", i);
+    write(dd, string, strlen(string));
     close(sd); //chiudo i due file, le loro sessioni e i loro canali
     close(dd);
     //SE CI SONO ERRORI, chiudi-riapri-tronchi.
@@ -777,57 +778,113 @@ void copyFile(char *source, char *destination) {
  * @param tag
  * @return
  */
-void *read_chrdev_thread(void *tag) {
+void *read_chrdev_thread(void *i) {
     char *chrdev_content;
-    FILE *file;
-
+    char path[20];
     chrdev_content = malloc(sizeof(char) * 4096);
     if (!chrdev_content) {
         printf("Errore nella malloc nel thread ");
         return NOT_OK;
     }
 
-    copyFile("/dev/tsdev_208", "tsdev_log.txt");
+    sprintf(path, "tsdev_log%ld.txt", (long) i);
+    copyFile("/dev/tsdev_208", path, (int) (long) i);
+    free(chrdev_content);
+    return OK;
+}
+
+void *receiver_chrdev_thread(void *ptr) {
+    long ret;
+    int i = (int) (long) ptr;
+    int updates_left = 10;
+    char buffer[10];
+
+
+    do {
+//        printf("Thread receiver %d - vado in ricezione\n", i);
+        ret = tag_receive(208, 16, buffer, 10);
+        if (ret == -1) {
+            char string[60];
+            sprintf(string, "chrdev_rw_test8: Thread receiver %d - update left %d", i, updates_left);
+            perror(string);
+        }
+        updates_left--;
+    } while (updates_left > 0);
 
     return OK;
 }
 
-void *inc_chrdev_thread(void *tag) {
+void *sender_chrdev_thread(void *ptr) {
+    long ret;
+    int i = (int) (long) ptr;
+    int send_left = 10;
+    char buffer[10] = "niente";
 
-}
+    do {
+//        printf("Thread sender %d - vado in send\n", i);
+        ret = tag_send(208, 16, buffer, 10);
+        if (ret == -1 && errno == EINTR) {
+            char string[60];
+            sprintf(string, "chrdev_rw_test8: Thread sender %d - send_lefts %d", i, send_left);
+            perror(string);
+        }
+        send_left--;
+    } while (send_left > 0);
 
-void *dec_chrdev_thread(void *tag) {
-
+    __sync_fetch_and_add(&remaining_senders, -1);
+    return OK;
 }
 
 /**
  * Esegue letture e scritture in modo concorrente sul char device.
  */
-int chrdev_rw_test8(const int threads) {
-    int i;
+int chrdev_rw_test8(const int threadTrios) {
+    long i;
     int key = 208;
     long tag;
-
-    pthread_t tid[threads];
-    void *thread_return[threads];
+    int fd_log;
+    pthread_t tid[threadTrios * 3];
+    void *thread_return[threadTrios * 3];
 
     if ((tag = tag_get(key, CREATE_TAG, EVERYONE)) == -1) {
         perror("chrdev_rw_test8: errore nella tag_get");
         FAILURE;
     }
 
+    // Elimino tutti i tsdev_log.txt
+    system("rm tsdev_log*");
+
     // aspetto che il file abbia i permessi in lettura...
-    while(access("/dev/tsdev_208", R_OK) == -1);
+    while (access("/dev/tsdev_208", R_OK) == -1);
 
-    pthread_create(&tid[0], NULL, read_chrdev_thread, (void *) tag);
-    // pthread_create(&tid[1], NULL, inc_chrdev_thread, (void *) tag);
-    // pthread_create(&tid[2], NULL, dec_chrdev_thread, (void *) tag);
+    for (i = 0; i < threadTrios * 3; i++) {
+        switch (i % 3) {
+            case 0:
+                pthread_create(&tid[i], NULL, read_chrdev_thread, (void *) i);
+                break;
+            case 1:
+                pthread_create(&tid[i], NULL, receiver_chrdev_thread, (void *) i);
+                break;
+            case 2:
+                __sync_fetch_and_add(&remaining_senders, 1);
+                pthread_create(&tid[i], NULL, sender_chrdev_thread, (void *) i);
+                break;
+            default:
+                printf("chrdev_rw_test8: errore grave, sto in default!!");
+        }
+    }
 
-    pthread_join(tid[0], &thread_return[0]);
+    // quando tutti i senders hanno finito, sveglio tutti i thread
+    while (remaining_senders > 0);
 
-    /*for(i = 0; i < threads; i++){
-        pthread_join(tid[i], &thread_return[0]);
-    }*/
+    if (tag_ctl((int) tag, AWAKE_ALL) == -1) {
+        perror("chrdev_rw_test8: errore nella awake_all");
+    }
+
+
+    for (i = 0; i < threadTrios; i++) {
+        pthread_join(tid[i], &thread_return[i]);
+    }
 
     if (tag_ctl((int) tag, REMOVE_TAG) == -1) {
         perror("chrdev_rw_test8: errore nella REMOVE_TAG");
@@ -836,11 +893,11 @@ int chrdev_rw_test8(const int threads) {
 
     int isSuccess = (int) (long) OK;
 
-    for (i = 0; i < threads; i++) {
+    for (i = 0; i < threadTrios; i++) {
         isSuccess = isSuccess && (thread_return[i] == OK);
     }
 
-    if(isSuccess){
+    if (isSuccess) {
         SUCCESS;
     } else {
         FAILURE;

@@ -14,4 +14,4 @@
 *.order
 *.elf
 *.o.d
-tsdev_log.txt
+tsdev_log*.txt
