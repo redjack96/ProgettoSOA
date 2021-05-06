@@ -400,6 +400,8 @@ void change_epoch(int tag_minor) {
     temp %= 2;
     dm->epoch[tag_minor] = temp;*/
 
+    mutex_lock(&dm->device_lock[ts->tag]);
+
     memset(dm->content[ts->tag], 0, 4096 * sizeof(char));
     strcpy(dm->content[ts->tag], "KEY\tEUID\tLEVEL\t#THREADS\n");
     for (i = 0; i < MAX_LEVELS; i++) {
@@ -408,6 +410,6 @@ void change_epoch(int tag_minor) {
     }
     dm->content[ts->tag][strlen(dm->content[ts->tag])] = '\0';
 
+    mutex_unlock(&dm->device_lock[ts->tag]);
 
-    asm volatile ("mfence");
 }
