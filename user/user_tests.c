@@ -34,7 +34,7 @@ void testsuite_tag_receive() {
     multiple_receive_different_tag_same_level_test4(3);
     device_write_test5(4, 0);
     signal_test6();
-    chrdev_read_performance_test7(10);
+    chrdev_read_performance_test7(10000);
     chrdev_rw_test8(5);
 }
 

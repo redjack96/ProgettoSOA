@@ -15,6 +15,7 @@
 
 #define OK (void *) 1
 #define NOT_OK (void *) 0
+#define AUDIT if(0)
 
 // char *semaName = "sharedSemaphore";
 static int thread_received1 = 0;
@@ -744,7 +745,7 @@ void copyFile(char *source, char *destination, int i) {
     /* Apriamo il file destinazione (esiste gia') e scrive dalla fine. Creato canale C' e sessione S'*/
     dd = open(destination, O_CREAT | O_WRONLY | O_APPEND, 0666);
     if (dd == -1) {
-        perror("Errore nell'apertura del file di desetinazione");
+        perror("Errore nell'apertura del file di destinazione");
         exit(1);
     }
 
@@ -781,7 +782,7 @@ void copyFile(char *source, char *destination, int i) {
 void *read_chrdev_thread(void *i) {
     char *chrdev_content;
     char path[20];
-    printf("lettore %ld\n", (long)  i);
+    AUDIT printf("Thread lettore %ld\n", (long)  i);
     chrdev_content = malloc(sizeof(char) * 4096);
     if (!chrdev_content) {
         printf("Errore nella malloc nel thread ");
@@ -802,7 +803,7 @@ void *receiver_chrdev_thread(void *ptr) {
 
 
     do {
-        printf("Thread receiver %d - vado in ricezione\n", i);
+        AUDIT printf("Thread receiver %d - vado in ricezione\n", i);
         ret = tag_receive(208, 16, buffer, 10);
         if (ret == -1) {
             char string[60];
@@ -822,7 +823,7 @@ void *sender_chrdev_thread(void *ptr) {
     char buffer[10] = "niente";
 
     do {
-        printf("Thread sender %d - vado in send\n", i);
+        AUDIT printf("Thread sender %d - vado in send\n", i);
         ret = tag_send(208, 16, buffer, 10);
         if (ret == -1 && errno == EINTR) {
             char string[60];
@@ -855,8 +856,9 @@ int chrdev_rw_test8(const int threadTrios) {
     // Elimino tutti i tsdev_log.txt
     system("rm tsdev_log*");
 
-    // aspetto che il file abbia i permessi in lettura...
-    while (access("/dev/tsdev_208", R_OK) == -1);
+    // Se non sono SUDO, aspetto che il file abbia i permessi in lettura...
+    if(!(getuid() == 0 || geteuid() == 0))
+        while (access("/dev/tsdev_208", R_OK) == -1);
 
     for (i = 0; i < threadTrios * 3; i++) {
         switch (i % 3) {

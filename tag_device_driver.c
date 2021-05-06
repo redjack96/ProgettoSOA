@@ -61,21 +61,17 @@ int my_dev_uevent(struct device *dev, struct kobj_uevent_env *env) {
     return buffer;
 }*/
 /**
- * Se l'epoca non e' cambiata, legge e basta.
- * Se l'epoca e' cambiata, invece deve scrivere.
- * L'epoca cambia quando cambia il numero di thread in attesa in qualsiasi livello.
- * @param ts
- * @return
+ * Copia la stringa nel parametro ts_status. Chiamata in una sezione critica RCU.
  */
-void get_tag_status(tag_service *ts, char *ts_status) {
+void get_tag_status(int tag_minor, char *ts_status) {
     char *pointer;
-    //mutex_lock(&dm->device_lock[ts->tag]);
 
-    pointer = rcu_dereference(dm->content[ts->tag]);
+    // dm->content[ts->tag] e' allocato durante la creazione del char device
+    // ed e' deallocato durante l'eliminazione del char device
+    // prima di cambiare il suo valore con un altro buffer, il buffer precedente viene liberato dallo scrittore (tag_receive/tag_get)
+    pointer = rcu_dereference(dm->content[tag_minor]);
     memcpy(ts_status, pointer, 4096); // non bloccante
     asm volatile ("mfence");
-
-    //mutex_unlock(&dm->device_lock[ts->tag]);
 
 }
 
@@ -138,16 +134,12 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
 
     ts_status = kmalloc(4096 * sizeof(char), GFP_KERNEL);
 
-    // Recupero o costruisco la stringa da restituire all'utente
-    // get_tag_status(ts->tag, ts_status);
+    // Copio la stringa da restituire all'utente in ts_status
     rcu_read_lock(); // internamente chiama preempt_disable
 
-    get_tag_status(ts, ts_status);
+    get_tag_status(ts->tag, ts_status);
 
     rcu_read_unlock(); // internamente chiama preempt_enable
-
-    // dm->content[ts->tag] e' allocato durante la creazione del char device
-    // ed e' deallocato durante l'eliminazione del char device
 
     size = strlen(ts_status);
 
@@ -157,7 +149,7 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
         return -EINTR;
     }
 
-    // Se arriviamo a EOF con la lettura, abbiamo finito di leggere quindi esco.
+    // Se arriviamo a EOF con la lettura, abbiamo finito di leggere - quindi esco.
     if (*f_pos >= size) {
         mutex_unlock(&dm->device_lock[ts->tag]);
         kfree(ts_status);
@@ -165,11 +157,11 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
     }
 
     /* Se il valore del cursore sommato al numero di byte da leggere supera la dimensione del messaggio,
-     * riduco il numero di file da leggere */
+     * riduco il numero di byte da leggere */
     if (*f_pos + count > size)
         count = size - *f_pos;
 
-    /* Se i byte da leggere superano ancora la dimensione della stringa da restituire, riduco i byte da leggere*/
+    /* Se i byte da leggere superano ancora la dimensione della stringa da restituire, leggo esattamente size byte */
     if (count > size)
         count = size;
 
@@ -270,11 +262,6 @@ int ts_create_char_device_file(int tag_minor) {
 
     // Se tutto va a buon fine, inizializzo la struttura dati:
     dm->content[tag_minor] = kmalloc(4096 * sizeof(char), GFP_KERNEL);
-/*
-    dm->epoch[tag_minor] = 0; // Imposto l'epoca a 0
-    dm->standing_readers[tag_minor][0] = 0L; // Imposto a 0 gli standing reader dell'epoca 0
-    dm->standing_readers[tag_minor][0] = 0L; // Imposto a 0 gli standing reader dell'epoca 1
-*/
     asm volatile ("mfence");
 
 
@@ -294,7 +281,7 @@ void ts_destroy_char_device_file(int tag_minor) {
     device_destroy(ts_class, MKDEV(ts_major, tag_minor));
     cdev_del(&dm->cdev[tag_minor]); // pulisce i metadati del device file (nodo di I/O)
 
-    // Non serve aspettare che finiscano i lettori perche' elimino (tag_ctl) il char device solo se non ci sono lettori (tag_receive) in attesa e se il modulo kenrnel non è bloccato!!!
+    // Non serve aspettare che finiscano i lettori perche' elimino (tag_ctl) il char device solo se non ci sono lettori (tag_receive) in attesa e quindi se il modulo kernel non è bloccato!!!
     // non posso eliminare un tag service e quindi il char device se ci sono lettori in attesa!!!
     kfree(dm->content[tag_minor]); // Libero la memoria del buffer corretto
     mutex_unlock(&dm->device_lock[tag_minor]);
@@ -385,50 +372,36 @@ void destroy_driver_and_all_devices(void) {
 }
 
 /**
- * [SCRITTORE] permette di cambiare epoca per sincronizzare i lettori del char device.
- * - TODO: Viene chiamata da tag_get quando crea il tag_service
- * - TODO: Viene chiamata da tag_receive quando un thread entra o esce dall'attesa.
+ * [SCRITTORE] permette di cambiare la stringa del char device
+ * - Viene chiamata da tag_get quando crea il tag_service
+ * - Viene chiamata da tag_receive quando un thread entra o esce dall'attesa.
  * @param tag_minor quale tag service/char device cambiare epoca
  */
 void change_epoch(int tag_minor) {
 
-//    int temp;
     int i, written;
     size_t size;
     char line[100];
     tag_service *ts;
-    char *newBuffer;
+    char *temp_buffer;
     char *header = "KEY\tEUID\tLEVEL\t#THREADS\n";
     ts = tsm->all_tag_services[tag_minor];
-//    for_each_online_cpu(cpu) run_on(cpu);
 
-
-    /*temp = dm->epoch[tag_minor];
-    dm->prev_epoch[tag_minor] = temp;
-    temp += 1;
-    temp %= 2;
-    dm->epoch[tag_minor] = temp;*/
-
-
-    newBuffer = kmalloc(4096 * sizeof(char), GFP_KERNEL);
-
-    // FIXME: Questo non basta... a volte vengono scritti in disordine
-    mutex_lock(&dm->device_lock[ts->tag]);
-
+    temp_buffer = kmalloc(4096 * sizeof(char), GFP_KERNEL);
     size = strlen(header);
-    strncpy(newBuffer, header, size);
+    strncpy(temp_buffer, header, size);
+
+    // Sincronizzo solo chi scrive nella struttura dati (tag_receive e tag_get)
+    mutex_lock(&dm->device_lock[ts->tag]);
     for (i = 0; i < MAX_LEVELS; i++) {
         written = sprintf(line, "%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i, ts->level[i].thread_waiting);
         size += written;
-        strcat(newBuffer, line);
+        strcat(temp_buffer, line);
     }
-    newBuffer[size] = '\0';
-
+    temp_buffer[size] = '\0';
     kfree(dm->content[ts->tag]);
 
-    // dm->content[ts->tag] = newBuffer;
-    rcu_assign_pointer(dm->content[ts->tag], newBuffer);
-
+    // assegno al content il mio buffer temporaneo con memory barriers
+    rcu_assign_pointer(dm->content[ts->tag], temp_buffer);
     mutex_unlock(&dm->device_lock[ts->tag]);
-
 }
