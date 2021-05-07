@@ -1,5 +1,6 @@
 # Project exclude paths
 /cmake-build-debug/
+/.tmp_versions/
 *.out
 *.cmd
 *.mod.cmd
