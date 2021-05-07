@@ -260,6 +260,7 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
             // Creo il char device corrispondente. IMPORTANTE: uso il tag descriptor come minor!!
             ts_create_char_device_file(tag);
 
+            change_epoch(tag);
 
             printk("%s: installato un tag-service in posizione %d e "
                    "il chardevice associato con (MAJOR, MINOR) = (%d,%d)\n", MODNAME, ts->tag,
@@ -268,7 +269,7 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
             module_put(THIS_MODULE);
             return tag;
         fail_no_mem:
-            for(lev = 0; lev < lev_created; lev++){
+            for (lev = 0; lev < lev_created; lev++) {
                 kfree(ts->level[lev].message); // messaggi dei livelli
             }
             kfree(ts->level); // livelli
@@ -519,6 +520,8 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, 
     atomic_inc((atomic_t *) &(ts->thread_waiting_message_count));
     atomic_inc((atomic_t *) &(ts->level[level].thread_waiting));
 
+    change_epoch(tag);
+
     /*
      * Il thread va in wait_queue. Sara' svegliato quando una delle seguenti condizioni si verifica
      * 1. arriva un segnale posix
@@ -540,6 +543,7 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, 
         rcu_read_unlock();
         atomic_dec((atomic_t *) &ts->thread_waiting_message_count);
         atomic_dec((atomic_t *) &ts->level[level].thread_waiting);
+        change_epoch(tag);
         LOG("Ricevuto un segnale di terminazione");
         module_put(THIS_MODULE);
         return -EINTR; // Interrupted system call
@@ -549,6 +553,7 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, 
         rcu_read_unlock();
         atomic_dec((atomic_t *) &ts->thread_waiting_message_count);
         atomic_dec((atomic_t *) &ts->level[level].thread_waiting);
+        change_epoch(tag);
         printk("%s: thread (pid = %d) - svegliato da comando AWAKE_ALL. Esco senza messaggi(thread rimasti in attesa nel tag: %lu})\n",
                MODNAME, current->pid, ts->thread_waiting_message_count);
         module_put(THIS_MODULE);
@@ -572,6 +577,7 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, 
 
     atomic_dec((atomic_t *) &ts->thread_waiting_message_count);
     atomic_dec((atomic_t *) &ts->level[level].thread_waiting);
+    change_epoch(tag);
 
     LOG1("Esco dall'attesa. Messaggio ricevuto lungo", real_size);
     module_put(THIS_MODULE);
@@ -746,7 +752,7 @@ int start(void) {
  * ripristina la tabella delle system call allo stato precedente al montaggio.
  */
 void end(void) {
-    int i,lev;
+    int i, lev;
     LOG(" -------------------- Disinstallazione in corso --------------------");
     // distruggo il device driver (utilizza l'array tsm).
     destroy_driver_and_all_devices();
@@ -755,7 +761,7 @@ void end(void) {
     // Dealloco gli eventuali tag service rimasti in memoria...
     for (i = 0; i < MAX_TAG_SERVICES; i++) {
         if (tsm.all_tag_services[i]) {
-            for(lev = 0; lev < MAX_LEVELS; lev++){
+            for (lev = 0; lev < MAX_LEVELS; lev++) {
                 kfree(tsm.all_tag_services[i]->level[lev].message);
             }
             kfree(tsm.all_tag_services[i]->level);

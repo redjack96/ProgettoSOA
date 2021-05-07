@@ -34,6 +34,8 @@ void testsuite_tag_receive() {
     multiple_receive_different_tag_same_level_test4(3);
     device_write_test5(4, 0);
     signal_test6();
+    chrdev_read_performance_test7(10000);
+    chrdev_rw_test8(5);
 }
 
 void testsuite_tag_ctl() {
@@ -47,8 +49,7 @@ void testsuite_tag_ctl() {
     awake_multiple_tag_test8();
     // Importante: questi ultimi tre test vanno eseguiti per ultimi perche cambiano utente...
     SUDO change_permission_during_send_test9(1); // impossibile inviare a un tag service eliminato
-    SUDO change_permission_during_send_test9(
-                2); // impossibile inviare su un tag service reistanziato con permessi diversi
+    SUDO change_permission_during_send_test9(2); // impossibile inviare su tag service reistanziato ONLY_OWNER
     SUDO change_permission_during_send_test9(3); // tutto funziona
 }
 
@@ -71,9 +72,7 @@ void all_tests() {
 int main() {
 
     printf("user=%d, effective user = %d\n", getuid(), geteuid());
-    // all_tests();
-    chrdev_read_performance_test7();
-
+    all_tests();
 
 #define CHECK_DEVICE 0
 #if (CHECK_DEVICE == 1)

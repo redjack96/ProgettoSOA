@@ -15,6 +15,7 @@
 
 #define OK (void *) 1
 #define NOT_OK (void *) 0
+#define AUDIT if(0)
 
 // char *semaName = "sharedSemaphore";
 static int thread_received1 = 0;
@@ -481,13 +482,8 @@ int readCharDev(char *returned) {
         printf("Impossibile aprire il file a causa dei permessi...\n");
         return -1;
     }
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    rewind(f);
 
-    char *string = malloc(fsize + 1);
     int ch;
-    fgets(string, (int) fsize, f);
     int i = 0;
     while ((ch = fgetc(f)) != EOF) {
         *(returned + i) = (char) ch;
@@ -526,18 +522,18 @@ int device_write_test5(int thread_number, int minuti) {
     int times = 0;
 retry:
     tag = tag_get(205, CREATE_TAG, EVERYONE);
-    if (tag < 0 && errno != ENOSYS)  {
+    if (tag < 0 && errno != ENOSYS) {
         perror("device_write_test5: tag_get");
         printf("device_write_test5: Elimino il tag e RIPROVO\n");
         tag_ctl(205, REMOVE_TAG);
-        if(times < 2){
+        if (times < 2) {
             times++;
             goto retry;
         } else {
             printf("device_write_test5: Devi montare il modulo\n");
             FAILURE;
         }
-    } else if(tag < 0 && errno == ENOSYS){
+    } else if (tag < 0 && errno == ENOSYS) {
         perror("device_write_test5");
         FAILURE;
     }
@@ -618,7 +614,7 @@ int signal_test6() {
     if ((pid = fork()) == -1) {
         perror("signal_test6: fork");
         FAILURE;
-    } else if (pid == 0){
+    } else if (pid == 0) {
         char buffer[16];
 
         sem_post(sem);
@@ -644,7 +640,7 @@ int signal_test6() {
         }
 
         // Se il processo figlio termina con exit code 2, allora ha funzionato!!!
-        if(returns == SIGINT){
+        if (returns == SIGINT) {
             SUCCESS;
         }
         printf("Figlio ha restituito %d", returns);
@@ -653,30 +649,34 @@ int signal_test6() {
 
 }
 
-FILE * perfFile;
+FILE *perfFile;
 int fd;
 
 /**
- * Media 1.2 * 10^-5 secondi con read
+ * Ricostruendo la stringa a ogni lettura: Media 1.2 e-05 secondi con read
+ * Con RCU : 7 e-07, 7.3 e-07, 6.8 e-07
  */
-void performanceReadCharDev(){
+void performanceReadCharDev() {
 
     char ch[1];
     while (read(fd, ch, 1) != 0); // 0 coincide con EOF
 
 }
 
-int chrdev_read_performance_test7(){
+/**
+ * Misura le performance delle letture del char device
+ * @param times: quante letture fare (es. 100000)
+ */
+int chrdev_read_performance_test7(int times) {
     struct timeval t0, t1;
     unsigned int i;
-    int times = 100000;
     int key = 207;
     double results[times];
     double sum = 0.0;
     double average;
     long tag;
 
-    if((tag = tag_get(key, CREATE_TAG, EVERYONE)) == -1){
+    if ((tag = tag_get(key, CREATE_TAG, EVERYONE)) == -1) {
         perror("chrdev_read_performance_test7: errore nella tag_get");
         FAILURE;
     }
@@ -697,7 +697,7 @@ int chrdev_read_performance_test7(){
         return -1;
     }
 
-    for(i = 0; i < times; i++){
+    for (i = 0; i < times; i++) {
         rewind(perfFile); // Riparto da 0 con il cursore
         gettimeofday(&t0, NULL);
 
@@ -708,17 +708,200 @@ int chrdev_read_performance_test7(){
         sum += results[i];
     }
 
-    average = sum/(double)times;
+    average = sum / (double) times;
 
-    printf("Tempo impiegato in media dopo %d chiamate %.2g secondi (totale = %.2g s)\n", times, average, sum);
+    printf("Tempo medio per leggere il char device %.2g secondi (%d letture in %.2g s)\n", average, times, sum);
 
     fclose(perfFile);
 
-    if(tag_ctl((int) tag, REMOVE_TAG) == -1){
+    if (tag_ctl((int) tag, REMOVE_TAG) == -1) {
         perror("chrdev_read_performance_test7: errore nella tag_ctl");
         FAILURE;
     }
 
 
     SUCCESS;
+}
+
+#define BUFSIZE 2048
+int remaining_senders = 0;
+
+void copyFile(char *source, char *destination, int i) {
+    /// size = numero di caratteri letti
+    int size;
+    char buffer[BUFSIZE];
+    char string[60];
+    int sd, dd; // source descriptor, destination descriptor.
+    int written;
+
+
+    /* Apriamo il file sorgente come RDOLY. Creati canale C e Sessione S*/
+    sd = open(source, O_RDONLY, 0666);
+    if (sd == -1) {
+        perror("Errore nell'apertura del device driver");
+        exit(1); //si chiudono tutti i canali di I/O e le sessioni.
+    }
+
+    /* Apriamo il file destinazione (esiste gia') e scrive dalla fine. Creato canale C' e sessione S'*/
+    dd = open(destination, O_CREAT | O_WRONLY | O_APPEND, 0666);
+    if (dd == -1) {
+        perror("Errore nell'apertura del file di destinazione");
+        exit(1);
+    }
+
+    /* Copia */
+    do {
+        /* lettura dalla sorgente di max BUFSIZE byte */
+        size = read(sd, buffer, BUFSIZE);
+        if (size == -1) { //se la size e' -1 si ferma
+            printf("Errore di lettura dal file sorgente\n");
+            exit(1);
+
+        }
+        //CONTROLLARE CHE QUELLO CHE HAI SCRITTO SIA UGUALE A QUELLO CHE HAI LETTO.
+        /* scrivi da BUFSIZE sul file di destinazione per la dimensione del buffer (size) */
+        written = write(dd, buffer, size);
+        if (written == -1) {
+            printf("Errore nel file di destinazione\n");
+            exit(1);
+        }
+        //CONTROLLARE CHE QUELLO CHE HAI SCRITTO SIA UGUALE A QUELLO CHE HAI LETTO.
+    } while (size > 0); //read ritorna 0 solo se arriviamo in fondo allo stream. (EOF)
+    sprintf(string, "-------------[Fine thread %d]-------------\n", i);
+    write(dd, string, strlen(string));
+    close(sd); //chiudo i due file, le loro sessioni e i loro canali
+    close(dd);
+    //SE CI SONO ERRORI, chiudi-riapri-tronchi.
+}
+
+/**
+ * Legge periodicamente i contenuti del char device e li scrive su un file.
+ * @param tag
+ * @return
+ */
+void *read_chrdev_thread(void *i) {
+    char *chrdev_content;
+    char path[20];
+    AUDIT printf("Thread lettore %ld\n", (long)  i);
+    chrdev_content = malloc(sizeof(char) * 4096);
+    if (!chrdev_content) {
+        printf("Errore nella malloc nel thread ");
+        return NOT_OK;
+    }
+
+    sprintf(path, "tsdev_log%ld.txt", (long) i);
+    copyFile("/dev/tsdev_208", path, (int) (long) i);
+    free(chrdev_content);
+    return OK;
+}
+
+void *receiver_chrdev_thread(void *ptr) {
+    long ret;
+    int i = (int) (long) ptr;
+    int updates_left = 10;
+    char buffer[10];
+
+
+    do {
+        AUDIT printf("Thread receiver %d - vado in ricezione\n", i);
+        ret = tag_receive(208, 16, buffer, 10);
+        if (ret == -1) {
+            char string[60];
+            sprintf(string, "chrdev_rw_test8: Thread receiver %d - update left %d", i, updates_left);
+            perror(string);
+        }
+        updates_left--;
+    } while (updates_left > 0);
+
+    return OK;
+}
+
+void *sender_chrdev_thread(void *ptr) {
+    long ret;
+    int i = (int) (long) ptr;
+    int send_left = 10;
+    char buffer[10] = "niente";
+
+    do {
+        AUDIT printf("Thread sender %d - vado in send\n", i);
+        ret = tag_send(208, 16, buffer, 10);
+        if (ret == -1 && errno == EINTR) {
+            char string[60];
+            sprintf(string, "chrdev_rw_test8: Thread sender %d - send_lefts %d", i, send_left);
+            perror(string);
+        }
+        send_left--;
+    } while (send_left > 0);
+
+    __sync_fetch_and_add(&remaining_senders, -1);
+    return OK;
+}
+
+/**
+ * Esegue letture e scritture in modo concorrente sul char device.
+ */
+int chrdev_rw_test8(const int threadTrios) {
+    long i;
+    int key = 208;
+    long tag;
+    pthread_t tid[threadTrios * 3];
+    void *thread_return[threadTrios * 3];
+
+    if ((tag = tag_get(key, CREATE_TAG, EVERYONE)) == -1) {
+        perror("chrdev_rw_test8: errore nella tag_get");
+        FAILURE;
+    }
+
+    // Elimino tutti i tsdev_log.txt
+    system("rm -f tsdev_log*");
+
+    // Se non sono SUDO, aspetto che il file abbia i permessi in lettura...
+    if(!(getuid() == 0 || geteuid() == 0))
+        while (access("/dev/tsdev_208", R_OK) == -1);
+
+    for (i = 0; i < threadTrios * 3; i++) {
+        switch (i % 3) {
+            case 0:
+                pthread_create(&tid[i], NULL, read_chrdev_thread, (void *) i);
+                break;
+            case 1:
+                pthread_create(&tid[i], NULL, receiver_chrdev_thread, (void *) i);
+                break;
+            case 2:
+                __sync_fetch_and_add(&remaining_senders, 1);
+                pthread_create(&tid[i], NULL, sender_chrdev_thread, (void *) i);
+                break;
+            default:
+                printf("chrdev_rw_test8: errore grave, sto in default!!");
+        }
+    }
+
+    // quando tutti i senders hanno finito, sveglio tutti i thread
+    while (remaining_senders > 0);
+
+    if (tag_ctl((int) tag, AWAKE_ALL) == -1) {
+        perror("chrdev_rw_test8: errore nella awake_all");
+    }
+
+
+    for (i = 0; i < threadTrios; i++) {
+        pthread_join(tid[i], &thread_return[i]);
+    }
+
+    if (tag_ctl((int) tag, REMOVE_TAG) == -1) {
+        perror("chrdev_rw_test8: errore nella REMOVE_TAG");
+        FAILURE;
+    }
+
+    int isSuccess = (int) (long) OK;
+
+    for (i = 0; i < threadTrios; i++) {
+        isSuccess = isSuccess && (thread_return[i] == OK);
+    }
+
+    if (isSuccess) {
+        SUCCESS;
+    } else {
+        FAILURE;
+    }
 }
