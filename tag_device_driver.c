@@ -367,12 +367,12 @@ void change_epoch(int tag_minor) {
     ts = tsm->all_tag_services[tag_minor];
 
     temp_buffer = kmalloc(4096 * sizeof(char), GFP_KERNEL);
-    sprintf(temp_buffer, "%s", header);
+    snprintf(temp_buffer, strlen(header) + 1, "%s", header); // Non uso sprintf per evitare buffer overflow
 
     // Sincronizzo solo chi scrive nella struttura dati (tag_receive (fuori dalla RCU) e tag_get)
     mutex_lock(&dm->device_lock[ts->tag]);
     for (i = 0; i < MAX_LEVELS; i++) {
-        sprintf(line, "%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i, ts->level[i].thread_waiting);
+        snprintf(line, 50,"%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i, ts->level[i].thread_waiting);
         strcat(temp_buffer, line);
     }
     temp_buffer[strlen(temp_buffer)] = '\0';
