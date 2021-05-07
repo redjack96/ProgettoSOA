@@ -844,7 +844,6 @@ int chrdev_rw_test8(const int threadTrios) {
     long i;
     int key = 208;
     long tag;
-    int fd_log;
     pthread_t tid[threadTrios * 3];
     void *thread_return[threadTrios * 3];
 
@@ -854,7 +853,7 @@ int chrdev_rw_test8(const int threadTrios) {
     }
 
     // Elimino tutti i tsdev_log.txt
-    system("rm tsdev_log*");
+    system("rm -f tsdev_log*");
 
     // Se non sono SUDO, aspetto che il file abbia i permessi in lettura...
     if(!(getuid() == 0 || geteuid() == 0))

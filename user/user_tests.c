@@ -72,9 +72,9 @@ void all_tests() {
 int main() {
 
     printf("user=%d, effective user = %d\n", getuid(), geteuid());
-    all_tests();
+    // all_tests();
     // chrdev_read_performance_test7(100000);
-    // chrdev_rw_test8(5);
+    chrdev_rw_test8(10);
 
 #define CHECK_DEVICE 0
 #if (CHECK_DEVICE == 1)
