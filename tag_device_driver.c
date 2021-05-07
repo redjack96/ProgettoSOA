@@ -26,9 +26,6 @@ typedef struct my_dev_manager {
     struct cdev cdev[MAX_TAG_SERVICES];
     struct mutex device_lock[MAX_TAG_SERVICES]; // Un thread che vuole modificare la stringa deve aspettare tutti gli standing readers...
     char *content[MAX_TAG_SERVICES]; // la stringa salvata per una epoca ... non puo' essere modificata finche' tutti non hanno letto
-//    unsigned long standing_readers[MAX_TAG_SERVICES][2]; // righe, colonne: per ogni tag_service, il numero di lettori rimasti nell'epoca 0 o 1.
-//    int epoch[MAX_TAG_SERVICES]; // un array di epoche, ciascuna puo' essere 0 o 1
-//    int prev_epoch[MAX_TAG_SERVICES];
 } dev_manager;
 
 dev_manager *dm;
@@ -42,24 +39,6 @@ int my_dev_uevent(struct device *dev, struct kobj_uevent_env *env) {
     return 0;
 }
 
-/**
- * Costruisce la stringa da restituire quando si legge questo char device...
- * @param ts tag_service da leggere
- * @return stringa cosi' formata: KEY EUID LEVEL #THREADS
- */
-/*char *get_tag_status(tag_service *ts, char *buffer) {
-    int i;
-
-    char linea[100];
-
-    strcpy(buffer, "KEY\tEUID\tLEVEL\t#THREADS\n");
-    for (i = 0; i < MAX_LEVELS; i++) {
-        sprintf(linea, "%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i, ts->level[i].thread_waiting);
-        strcat(buffer, linea);
-    }
-    buffer[strlen(buffer)] = '\0';
-    return buffer;
-}*/
 /**
  * Copia la stringa nel parametro ts_status. Chiamata in una sezione critica RCU.
  */
@@ -391,7 +370,7 @@ void change_epoch(int tag_minor) {
     size = strlen(header);
     strncpy(temp_buffer, header, size);
 
-    // Sincronizzo solo chi scrive nella struttura dati (tag_receive e tag_get)
+    // Sincronizzo solo chi scrive nella struttura dati (tag_receive (fuori dalla RCU) e tag_get)
     mutex_lock(&dm->device_lock[ts->tag]);
     for (i = 0; i < MAX_LEVELS; i++) {
         written = sprintf(line, "%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i, ts->level[i].thread_waiting);
