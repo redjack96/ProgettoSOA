@@ -74,7 +74,7 @@ int main() {
     printf("user=%d, effective user = %d\n", getuid(), geteuid());
     all_tests();
 
-#define CHECK_DEVICE 0
+#define CHECK_DEVICE 1
 #if (CHECK_DEVICE == 1)
     int minuti = 1;
     printf("Test corretti fin'ora (%d/%d). Eseguo il test sul char device bloccante per %d minuti.\n", success, tests, minuti);
