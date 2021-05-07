@@ -17,6 +17,8 @@
 #define ERR(msg) AUDIT _LOG(msg, MODNAME, KERN_ERR)
 #define ERR1(msg, num) AUDIT _LOG1(msg, MODNAME, KERN_ERR, num)
 
+#define BUFSIZE 4096
+
 // variabili globali esclusive di questo file
 struct class *ts_class = NULL;  // class condivisa da tutti i char device files (usata solo in questo file)
 unsigned int ts_major = 0;      // MAJOR number condiviso da tutti i char device files
@@ -49,7 +51,7 @@ void get_tag_status(int tag_minor, char *ts_status) {
     // ed e' deallocato durante l'eliminazione del char device
     // prima di cambiare il suo valore con un altro buffer, il buffer precedente viene liberato dallo scrittore (tag_receive/tag_get)
     pointer = rcu_dereference(dm->content[tag_minor]);
-    memcpy(ts_status, pointer, 4096); // non bloccante
+    memcpy(ts_status, pointer, BUFSIZE); // non bloccante
     asm volatile ("mfence");
 
 }
@@ -111,7 +113,7 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
     tag_service *ts = (tag_service *) filp->private_data;
 
 
-    ts_status = kmalloc(4096 * sizeof(char), GFP_KERNEL);
+    ts_status = kmalloc(BUFSIZE * sizeof(char), GFP_KERNEL);
 
     // Copio la stringa da restituire all'utente in ts_status
     rcu_read_lock(); // internamente chiama preempt_disable
@@ -240,7 +242,7 @@ int ts_create_char_device_file(int tag_minor) {
     }
 
     // Se tutto va a buon fine, inizializzo la struttura dati:
-    dm->content[tag_minor] = kmalloc(4096 * sizeof(char), GFP_KERNEL);
+    dm->content[tag_minor] = kmalloc(BUFSIZE * sizeof(char), GFP_KERNEL);
     asm volatile ("mfence");
 
 
@@ -366,16 +368,15 @@ void change_epoch(int tag_minor) {
     char *header = "KEY\tEUID\tLEVEL\t#THREADS\n";
     ts = tsm->all_tag_services[tag_minor];
 
-    temp_buffer = kmalloc(4096 * sizeof(char), GFP_KERNEL);
-    snprintf(temp_buffer, strlen(header) + 1, "%s", header); // Non uso sprintf per evitare buffer overflow
+    temp_buffer = kmalloc(BUFSIZE * sizeof(char), GFP_KERNEL);
+    strncpy(temp_buffer, header, strlen(header));
 
     // Sincronizzo solo chi scrive nella struttura dati (tag_receive (fuori dalla RCU) e tag_get)
     mutex_lock(&dm->device_lock[ts->tag]);
     for (i = 0; i < MAX_LEVELS; i++) {
         snprintf(line, 50,"%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i, ts->level[i].thread_waiting);
-        strcat(temp_buffer, line);
+        strncat(temp_buffer, line, strlen(line));
     }
-    temp_buffer[strlen(temp_buffer)] = '\0';
     kfree(dm->content[ts->tag]);
 
     // assegno al content il mio buffer temporaneo con memory barriers

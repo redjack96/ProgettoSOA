@@ -160,7 +160,6 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
 
     if (key != IPC_PRIVATE) {
         tag = hash_function(key);
-        mutex_lock(&tsm.access_lock[tag]);
     } else {
         tag = find_first_entry_available();
         // Controllo se ha fallito (non c'e' piu' spazio nell'array)
@@ -169,11 +168,11 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
             module_put(THIS_MODULE);
             return -ENOMEM;
         }
-        mutex_lock(&tsm.access_lock[tag]); // se fosse tag == -1, mettendolo prima dell'if avrei un errore
     }
 
     // Non voglio che delle tag_get concorrenti instanzino piu' volte lo stesso tag
     /* Inizio sezione critica */
+    mutex_lock(&tsm.access_lock[tag]);
 
     /*
      * Scenari:
@@ -221,7 +220,7 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
             ts->owner_uid = UID;
             ts->awake_request = NO;
             ts->tag = tag; // Se l'elemento e' gia' occupato, la tag_get fallisce prima
-            ts->level = kzalloc(sizeof(tag_level) * MAX_LEVELS, GFP_KERNEL);
+            ts->level = kzalloc(sizeof(tag_level) * MAX_LEVELS, GFP_ATOMIC);
             if (!ts->level) {
                 mutex_unlock(&tsm.access_lock[tag]);
                 ERR1("Impossibile allocare spazio per i livelli del tag", tag);
@@ -240,7 +239,7 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
                 ts->level[lev].tag = tag;
                 // Alloca tutti i messaggi in anticipo... memoria in più, migliori prestazioni...
                 ts->level[lev].message = kzalloc(sizeof(char) * MAX_MESSAGE_SIZE,
-                                                 GFP_KERNEL); // alta priorità ma può essere deschedulato.
+                                                 GFP_ATOMIC); // non voglio che sia deschedulato, siamo in sezione critica
                 if (!ts->level[lev].message) {
                     mutex_unlock(&tsm.access_lock[tag]);
                     ERR1("Impossibile allocare spazio per i messaggi del tag", tag);
@@ -354,14 +353,13 @@ __SYSCALL_DEFINEx(4, _tag_send, int, tag, int, level, char*, buffer, size_t, siz
     }
 
 
-    // Copio il messaggio che la send deve inviare in un buffer intermedio fuori da sezione critica, per far degradare le prestazioni.
+    // Copio il messaggio che la send deve inviare in un buffer intermedio fuori da sezione critica, per NON far degradare le prestazioni.
     intermediate_buffer = (void *) get_zeroed_page(GFP_KERNEL);
 
-    // controlla la dimensione della stringa
+    // controlla la dimensione della stringa e la riduce se necessario
     real_size = size > MAX_MESSAGE_SIZE - 1 ? MAX_MESSAGE_SIZE - 1 : strlen(buffer) + 1;
 
     not_copied = copy_from_user(intermediate_buffer, buffer, real_size);
-
 
     ts = tsm.all_tag_services[tag];
 
@@ -398,7 +396,7 @@ __SYSCALL_DEFINEx(4, _tag_send, int, tag, int, level, char*, buffer, size_t, siz
      */
     mutex_lock(&tsm.access_lock[tag]);
 
-    // Il tag service e' stato eliminato
+    // Il tag service e' stato eliminato logicamente ?
     if (ts->lazy_deleted == YES) {
         mutex_unlock(&tsm.access_lock[tag]);
         free_pages((unsigned long) intermediate_buffer, 0);
@@ -520,6 +518,8 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, 
     atomic_inc((atomic_t *) &(ts->thread_waiting_message_count));
     atomic_inc((atomic_t *) &(ts->level[level].thread_waiting));
 
+
+    // Aggiorna il char device ricostruendoo la stringa
     change_epoch(tag);
 
     /*
@@ -530,9 +530,7 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, 
      *
      * La condizione non si controlla automaticamente: il thread va svegliato.
      */
-    wait_event_interruptible(the_queue,
-                             ts->level[level].message_ready == READY
-                             || ts->awake_request == YES);
+    wait_event_interruptible(the_queue, ts->level[level].message_ready == READY || ts->awake_request == YES);
 
     // Non c'e' bisogno di controllare per lazy_deleted == YES perche' essendoci ancora almeno un thread in ricezione, le eventuali REMOVE_TAG falliscono
     // non mi blocco, voglio solo leggere. Quando tutti hanno letto, permetto alla tag_receive di azzerare il messaggio
@@ -628,7 +626,7 @@ __SYSCALL_DEFINEx(2, _tag_ctl, int, tag, int, command) {
         return SUCCESS;
     }
 
-    // Controllo se il thread ha i permessi per controllare il tag service
+    // Controllo se il thread ha i permessi per controllare il tag service (siamo in sezione critica)
     if (ts->permission == ONLY_OWNER && ts->owner_euid != EUID) {
         mutex_unlock(&tsm.access_lock[ts->tag]);
         printk(KERN_ERR "%s: thread %d - L'utente non dispone dei permessi per %s tag_service %d", MODNAME,
@@ -641,7 +639,7 @@ __SYSCALL_DEFINEx(2, _tag_ctl, int, tag, int, command) {
 
     switch (command) {
         case REMOVE_TAG:
-            // Se ci sono thread in attesa
+            // Se ci sono thread in attesa, la REMOVE FALLISCE
             if (ts->thread_waiting_message_count > 0) {
                 mutex_unlock(&tsm.access_lock[ts->tag]);
                 ERR1("Impossibile rimuovere il tag service. Thread(s) in attesa", ts->thread_waiting_message_count);
