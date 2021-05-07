@@ -141,7 +141,7 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
 #endif
     int tag;
     int lev;
-    int lev_created;
+    int lev_created = 0;
     tag_service *ts;
 
     printk("%s: il thread %d esegue tag_get con key=%d, command=%s, permission=%s\n",

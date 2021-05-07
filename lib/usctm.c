@@ -1,9 +1,6 @@
 #include "usctm.h"
 #include "vtpm.h"
 
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Giacomo Lorenzo Rossi <giacomo.redjack@gmail.com>");
-MODULE_DESCRIPTION("trova la system call table a runtime e funziona anche su kernel 5");
 #define MODNAME "SYS-CALL-TABLE-FINDER"
 #define LOG(msg) printk("%s: %s", MODNAME, msg);
 

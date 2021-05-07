@@ -358,8 +358,8 @@ void destroy_driver_and_all_devices(void) {
  */
 void change_epoch(int tag_minor) {
 
-    int i, written;
-    size_t size;
+    int i;
+    // size_t size;
     char line[100];
     tag_service *ts;
     char *temp_buffer;
@@ -367,17 +367,15 @@ void change_epoch(int tag_minor) {
     ts = tsm->all_tag_services[tag_minor];
 
     temp_buffer = kmalloc(4096 * sizeof(char), GFP_KERNEL);
-    size = strlen(header);
-    strncpy(temp_buffer, header, size);
+    sprintf(temp_buffer, "%s", header);
 
     // Sincronizzo solo chi scrive nella struttura dati (tag_receive (fuori dalla RCU) e tag_get)
     mutex_lock(&dm->device_lock[ts->tag]);
     for (i = 0; i < MAX_LEVELS; i++) {
-        written = sprintf(line, "%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i, ts->level[i].thread_waiting);
-        size += written;
+        sprintf(line, "%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i, ts->level[i].thread_waiting);
         strcat(temp_buffer, line);
     }
-    temp_buffer[size] = '\0';
+    temp_buffer[strlen(temp_buffer)] = '\0';
     kfree(dm->content[ts->tag]);
 
     // assegno al content il mio buffer temporaneo con memory barriers
