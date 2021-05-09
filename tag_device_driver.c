@@ -358,7 +358,7 @@ void destroy_driver_and_all_devices(void) {
  * - Viene chiamata da tag_receive quando un thread entra o esce dall'attesa.
  * @param tag_minor quale tag service/char device cambiare epoca
  */
-void change_epoch(int tag_minor) {
+void update_chrdev(int tag_minor) {
 
     int i;
     // size_t size;

@@ -259,7 +259,7 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
             // Creo il char device corrispondente. IMPORTANTE: uso il tag descriptor come minor!!
             ts_create_char_device_file(tag);
 
-            change_epoch(tag);
+            update_chrdev(tag);
 
             printk("%s: installato un tag-service in posizione %d e "
                    "il chardevice associato con (MAJOR, MINOR) = (%d,%d)\n", MODNAME, ts->tag,
@@ -520,7 +520,7 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, 
 
 
     // Aggiorna il char device ricostruendoo la stringa
-    change_epoch(tag);
+    update_chrdev(tag);
 
     /*
      * Il thread va in wait_queue. Sara' svegliato quando una delle seguenti condizioni si verifica
@@ -541,7 +541,7 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, 
         rcu_read_unlock();
         atomic_dec((atomic_t *) &ts->thread_waiting_message_count);
         atomic_dec((atomic_t *) &ts->level[level].thread_waiting);
-        change_epoch(tag);
+        update_chrdev(tag);
         LOG("Ricevuto un segnale di terminazione");
         module_put(THIS_MODULE);
         return -EINTR; // Interrupted system call
@@ -551,7 +551,7 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, 
         rcu_read_unlock();
         atomic_dec((atomic_t *) &ts->thread_waiting_message_count);
         atomic_dec((atomic_t *) &ts->level[level].thread_waiting);
-        change_epoch(tag);
+        update_chrdev(tag);
         printk("%s: thread (pid = %d) - svegliato da comando AWAKE_ALL. Esco senza messaggi(thread rimasti in attesa nel tag: %lu})\n",
                MODNAME, current->pid, ts->thread_waiting_message_count);
         module_put(THIS_MODULE);
@@ -575,7 +575,7 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, 
 
     atomic_dec((atomic_t *) &ts->thread_waiting_message_count);
     atomic_dec((atomic_t *) &ts->level[level].thread_waiting);
-    change_epoch(tag);
+    update_chrdev(tag);
 
     LOG1("Esco dall'attesa. Messaggio ricevuto lungo", real_size);
     module_put(THIS_MODULE);
