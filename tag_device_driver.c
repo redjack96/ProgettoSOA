@@ -448,8 +448,6 @@ int update_chrdev(int tag_minor, int level) {
         i++;
     }
 
-    printk("%s: #Delimiters: %d. After_string: %s", MODNAME, delimiters_found, after_string);
-
     while (ch != '\t' && i > 0) {
         i--;
         if ((ch = temp_buffer[i]) == '\t') {
@@ -461,19 +459,15 @@ int update_chrdev(int tag_minor, int level) {
     before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
     strncpy(before_string, temp_buffer, before_token);
 
-    printk("%s: Before_String: %s", MODNAME, before_string);
 
     final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
     strcat(final_string, before_string);
-    sprintf(waiting, "\t%lu", ts->level[level].thread_waiting); // spero ci sia \0
+    sprintf(waiting, "%lu", ts->level[level].thread_waiting); // spero ci sia \0
     strcat(final_string, waiting);
     strcat(final_string, after_string);
 
-    LOG("Libero after_string");
     kfree(after_string);
-    LOG("Libero before_string");
     kfree(before_string);
-    LOG("Libero dm->content");
     kfree(dm->content[ts->tag]);
 
     // assegno al content il mio buffer temporaneo con memory barriers
