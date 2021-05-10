@@ -453,7 +453,7 @@ int update_chrdev(int tag_minor, int level) {
         i++;
     }
 
-    printk("%s: After_string: %s", MODNAME, after_string);
+    printk("%s: #Delimiters: %d. After_string: %s", MODNAME, delimiters_found, after_string);
 
     if (found) {
         found = 0;
@@ -485,10 +485,10 @@ int update_chrdev(int tag_minor, int level) {
     strcat(final_string, waiting);
     strcat(final_string, after_string);
 
-    fail:
-    kfree(before_string);
-    fail2:
+fail2:
     kfree(after_string);
+fail:
+    kfree(before_string);
     kfree(dm->content[ts->tag]);
 
     // assegno al content il mio buffer temporaneo con memory barriers
