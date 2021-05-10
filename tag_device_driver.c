@@ -441,7 +441,7 @@ int update_chrdev(int tag_minor, int level) {
     found = 0; // false
     delimiters_found = 0; // numero di delimitatori trovati
     ch = 'a'; // dummy char
-    while (delimiters_found < level && ch != '\0') {
+    while (delimiters_found < (level + 2) && ch != '\0') { // +2 perche' escludo l'header
         if ((ch = temp_buffer[i]) == '\n') {
             delimiters_found++;
             after_string = kmalloc(sizeof(char) * (strlen(temp_buffer) - i + 1), GFP_ATOMIC);
@@ -452,6 +452,8 @@ int update_chrdev(int tag_minor, int level) {
         }
         i++;
     }
+
+    printk("%s: After_string: %s", MODNAME, after_string);
 
     if (found) {
         found = 0;
@@ -475,15 +477,17 @@ int update_chrdev(int tag_minor, int level) {
         ERR("Fallimento nel primo while");
         goto fail;
     }
+    printk("%s: Before_String: %s", MODNAME, before_string);
+
     final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
     strcat(final_string, before_string);
     sprintf(waiting, "%lu", ts->level[level].thread_waiting); // spero ci sia \0
     strcat(final_string, waiting);
     strcat(final_string, after_string);
 
-fail:
+    fail:
     kfree(before_string);
-fail2:
+    fail2:
     kfree(after_string);
     kfree(dm->content[ts->tag]);
 
