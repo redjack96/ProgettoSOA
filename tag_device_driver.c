@@ -467,7 +467,7 @@ int update_chrdev(int tag_minor, int level) {
             strncpy(before_string, temp_buffer, before_token);
         } else {
             ret = -2; // fallimento nel secondo while
-            goto fail;
+            goto fail2;
         }
     } else {
         ret = -1; // fallimento nel primo while
@@ -479,13 +479,14 @@ int update_chrdev(int tag_minor, int level) {
     strcat(final_string, waiting);
     strcat(final_string, after_string);
 
-    fail:
+fail:
     kfree(before_string);
+fail2:
     kfree(after_string);
     kfree(dm->content[ts->tag]);
 
     // assegno al content il mio buffer temporaneo con memory barriers
-    rcu_assign_pointer(dm->content[ts->tag], temp_buffer);
+    rcu_assign_pointer(dm->content[ts->tag], final_string);
     mutex_unlock(&dm->device_lock[ts->tag]);
     return ret;
 }
