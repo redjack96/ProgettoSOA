@@ -1,7 +1,6 @@
 //
 // Created by giacomo on 16/04/21.
 //
-
 #include "tag_device_driver.h"
 
 /* IL prefisso del nome di un nodo di I/O (char device file). Dopo questo prefisso va scritto
@@ -31,6 +30,24 @@ typedef struct my_dev_manager {
 } dev_manager;
 
 dev_manager *dm;
+
+int countCharsOfNumber(long n) {
+    int count;
+
+    if (n == 0) return 1;
+
+    count = 0;
+    if (n < 0) {
+        count++;
+        n = -n;
+    }
+
+    while (n != 0) {
+        n = n / 10; // Es. 25 -> 2 -> 0: 2 cifre. 36453 -> 3645 -> 364 -> 36 -> 3 -> 0: 5 cifre.
+        count++;
+    }
+    return count;
+}
 
 /**
  * Permette di impostare i permessi di tutti i char device con la classe ts_class, in modo tale da
@@ -206,8 +223,20 @@ int ts_create_char_device_file(int tag_minor) {
     int err;
     dev_t devt_node = MKDEV(ts_major, tag_minor);
     struct device *device = NULL;
+    int i;
+    // size_t size;
+    char line[100];
+    tag_service *ts;
+    //char *temp_buffer;
+    char *header = "KEY\tEUID\tLEVEL\t#THREADS\n"; // Header per il buffer del char device
 
     BUG_ON(ts_class == NULL);
+
+    // Inizializzo la stringa per il buffer
+    ts = tsm->all_tag_services[tag_minor];
+
+    // TODO: mi serve un buffer temporaneo??
+    //temp_buffer = kmalloc(BUFSIZE * sizeof(char), GFP_KERNEL);
 
     // Inizializza la struct cdev coi metadati del nodo
     mutex_lock(&dm->device_lock[tag_minor]);
@@ -241,10 +270,29 @@ int ts_create_char_device_file(int tag_minor) {
         return err;
     }
 
-    // Se tutto va a buon fine, inizializzo la struttura dati:
-    dm->content[tag_minor] = kmalloc(BUFSIZE * sizeof(char), GFP_KERNEL);
+    /* Se tutto va a buon fine, inizializzo SOLO UNA VOLTA la struttura dati con i contenuti del char device */
+    dm->content[tag_minor] = kmalloc(BUFSIZE * sizeof(char), GFP_ATOMIC); // Sto in sezione critica, non voglio dormire
     asm volatile ("mfence");
 
+    // Questa stringa non viene piu' ricostruita quando eseguo la tag_receive, ma solo quando chiamo tag_get la prima volta
+    strncpy(dm->content[tag_minor], header, strlen(header));
+    for (i = 0; i < MAX_LEVELS; i++) {
+
+        // Numero di cifre
+        int num1 = countCharsOfNumber(MAX_TAG_SERVICES); // es. per 512, num1 = 3
+        int num2 = countCharsOfNumber(ts->owner_uid);
+        int num3 = countCharsOfNumber(MAX_LEVELS);
+        int num4 = countCharsOfNumber((long) ts->level[i].thread_waiting);
+
+        snprintf(line, num1 + num2 + num3 + num4 + 5, "%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i,
+                 ts->level[i].thread_waiting);
+        strncat(dm->content[tag_minor], line, strlen(line));
+    }
+    // kfree(dm->content[tag_minor]); // temp_buffer
+
+    // assegno al content il mio buffer temporaneo con memory barriers
+    // dm->content[tag_minor] = temp_buffer; // Ricorda pure mfence
+    // rcu_assign_pointer(dm->content[tag_minor], temp_buffer);
 
     mutex_unlock(&dm->device_lock[tag_minor]);
     return 0;
@@ -356,30 +404,88 @@ void destroy_driver_and_all_devices(void) {
  * [SCRITTORE] permette di cambiare la stringa del char device
  * - Viene chiamata da tag_get quando crea il tag_service
  * - Viene chiamata da tag_receive quando un thread entra o esce dall'attesa.
- * @param tag_minor quale tag service/char device cambiare epoca
+ *
+ * FIXME: l'unica cosa che cambia
+ *
+ * @param tag_minor il tag service/char device a cui cambiare la stringa
  */
-void update_chrdev(int tag_minor) {
+int update_chrdev(int tag_minor, int level) {
 
-    int i;
-    // size_t size;
-    char line[100];
+    int i, ret;
     tag_service *ts;
+    char waiting[10];
     char *temp_buffer;
-    char *header = "KEY\tEUID\tLEVEL\t#THREADS\n";
+    int found;
+    int delimiters_found;
+    char *after_string; // Da \n del livello 'level' alla fine
+    int before_token; // Posizione del terzo \t del livello 'level'
+    char ch;
+    char *before_string;
+    char *final_string;
     ts = tsm->all_tag_services[tag_minor];
 
     temp_buffer = kmalloc(BUFSIZE * sizeof(char), GFP_KERNEL);
-    strncpy(temp_buffer, header, strlen(header));
 
+    ret = 0;
+    // TODO : TESTARE al primo livello, in mezzo, all'ultimo livello e un numero di thread a due cifre
     // Sincronizzo solo chi scrive nella struttura dati (tag_receive (fuori dalla RCU) e tag_get)
     mutex_lock(&dm->device_lock[ts->tag]);
-    for (i = 0; i < MAX_LEVELS; i++) {
-        snprintf(line, 50,"%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i, ts->level[i].thread_waiting);
-        strncat(temp_buffer, line, strlen(line));
+    memcpy(temp_buffer, dm->content[ts->tag], strlen(dm->content[ts->tag]));
+
+
+    // Suddividi la stringa in tre parti:
+    // La parte prima dei thread in attesa (fino al terzo \t)
+    // Il numero di nuovi thread in attesa
+    // La parte dal \n in poi
+    i = 0; // spiazzamento del buffer
+    found = 0; // false
+    delimiters_found = 0; // numero di delimitatori trovati
+    ch = 'a'; // dummy char
+    while (delimiters_found < level && ch != '\0') {
+        if ((ch = temp_buffer[i]) == '\n') {
+            delimiters_found++;
+            after_string = kmalloc(sizeof(char) * (strlen(temp_buffer) - i + 1), GFP_ATOMIC);
+            strncpy(after_string, temp_buffer + i, strlen(temp_buffer) - i);
+            if (delimiters_found == level) {
+                found = 1;
+            }
+        }
+        i++;
     }
+
+    if (found) {
+        found = 0;
+        while (ch != '\t') {
+            i--;
+            if ((ch = temp_buffer[i]) == '\t') {
+                found = 1;
+                before_token = i;
+            }
+        }
+        if (found) {
+            before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
+            strncpy(before_string, temp_buffer, before_token);
+        } else {
+            ret = -2; // fallimento nel secondo while
+            goto fail;
+        }
+    } else {
+        ret = -1; // fallimento nel primo while
+        goto fail;
+    }
+    final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
+    strcat(final_string, before_string);
+    sprintf(waiting, "%lu", ts->level[level].thread_waiting); // spero ci sia \0
+    strcat(final_string, waiting);
+    strcat(final_string, after_string);
+
+    fail:
+    kfree(before_string);
+    kfree(after_string);
     kfree(dm->content[ts->tag]);
 
     // assegno al content il mio buffer temporaneo con memory barriers
     rcu_assign_pointer(dm->content[ts->tag], temp_buffer);
     mutex_unlock(&dm->device_lock[ts->tag]);
+    return ret;
 }
