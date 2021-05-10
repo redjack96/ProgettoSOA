@@ -432,29 +432,32 @@ int update_chrdev(int tag_minor, int level) {
     memcpy(temp_buffer, dm->content[ts->tag], strlen(dm->content[ts->tag]));
 
 
-    // Suddividi la stringa in tre parti:
-    // La parte prima dei thread in attesa (fino al terzo \t)
+    // Suddividi la stringa in tre parti e poi uniscile:
+    // La parte prima dei thread in attesa (fino al terzo \t incluso)
     // Il numero di nuovi thread in attesa
     // La parte dal \n in poi
     i = 0; // spiazzamento del buffer
     delimiters_found = 0; // numero di delimitatori trovati
     ch = 'a'; // dummy char
+
+    // TODO: possibilmente, arrivare direttamente, senza ciclo while, al punto in cui suddividere la stringa
+
     while (delimiters_found < (level + 2) && ch != '\0') { // +2 perche' escludo l'header
+        i++; // l'ultima volta, andiamo a capo
         if ((ch = temp_buffer[i]) == '\n') {
             delimiters_found++;
-            after_string = kmalloc(sizeof(char) * (strlen(temp_buffer) - i + 1), GFP_ATOMIC);
-            strncpy(after_string, temp_buffer + i, strlen(temp_buffer) - i);
         }
-        i++;
     }
 
+    after_string = kmalloc(sizeof(char) * (strlen(temp_buffer) - i + 1), GFP_ATOMIC);
+    strncpy(after_string, temp_buffer + i, strlen(temp_buffer) - i);
+
+    // Finche' non arrivo al primo tab (da destra), oppure i == 0
     while (ch != '\t' && i > 0) {
         i--;
-        if ((ch = temp_buffer[i]) == '\t') {
-            before_token = i + 1; // il carattere successivo a \t (il numero di thread in ricezione)
-            break;
-        }
+        ch = temp_buffer[i];
     }
+    before_token = i + 1; // il carattere successivo a \t (il numero di thread in ricezione)
 
     before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
     strncpy(before_string, temp_buffer, before_token);
