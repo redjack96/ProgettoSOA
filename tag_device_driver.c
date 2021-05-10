@@ -415,7 +415,6 @@ int update_chrdev(int tag_minor, int level) {
     tag_service *ts;
     char waiting[10];
     char *temp_buffer;
-    int found;
     int delimiters_found;
     int before_token; // Posizione del terzo \t del livello 'level'
     char ch;
@@ -454,8 +453,8 @@ int update_chrdev(int tag_minor, int level) {
     while (ch != '\t' && i > 0) {
         i--;
         if ((ch = temp_buffer[i]) == '\t') {
-            found = 1;
-            before_token = i;
+            before_token = i + 1; // il carattere successivo a \t (il numero di thread in ricezione)
+            break;
         }
     }
 
@@ -466,7 +465,7 @@ int update_chrdev(int tag_minor, int level) {
 
     final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
     strcat(final_string, before_string);
-    sprintf(waiting, "%lu", ts->level[level].thread_waiting); // spero ci sia \0
+    sprintf(waiting, "\t%lu", ts->level[level].thread_waiting); // spero ci sia \0
     strcat(final_string, waiting);
     strcat(final_string, after_string);
 
