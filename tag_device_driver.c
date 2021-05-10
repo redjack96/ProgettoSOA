@@ -466,11 +466,13 @@ int update_chrdev(int tag_minor, int level) {
             before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
             strncpy(before_string, temp_buffer, before_token);
         } else {
+            ERR("Fallimento nel secondo while");
             ret = -2; // fallimento nel secondo while
             goto fail2;
         }
     } else {
         ret = -1; // fallimento nel primo while
+        ERR("Fallimento nel primo while");
         goto fail;
     }
     final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
