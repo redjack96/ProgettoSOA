@@ -417,9 +417,9 @@ int update_chrdev(int tag_minor, int level) {
     char *temp_buffer;
     int found;
     int delimiters_found;
-    char *after_string; // Da \n del livello 'level' alla fine
     int before_token; // Posizione del terzo \t del livello 'level'
     char ch;
+    char *after_string; // Da \n del livello 'level' alla fine
     char *before_string;
     char *final_string;
     ts = tsm->all_tag_services[tag_minor];
@@ -438,7 +438,6 @@ int update_chrdev(int tag_minor, int level) {
     // Il numero di nuovi thread in attesa
     // La parte dal \n in poi
     i = 0; // spiazzamento del buffer
-    found = 0; // false
     delimiters_found = 0; // numero di delimitatori trovati
     ch = 'a'; // dummy char
     while (delimiters_found < (level + 2) && ch != '\0') { // +2 perche' escludo l'header
@@ -446,37 +445,23 @@ int update_chrdev(int tag_minor, int level) {
             delimiters_found++;
             after_string = kmalloc(sizeof(char) * (strlen(temp_buffer) - i + 1), GFP_ATOMIC);
             strncpy(after_string, temp_buffer + i, strlen(temp_buffer) - i);
-            if (delimiters_found == level) {
-                found = 1;
-            }
         }
         i++;
     }
 
     printk("%s: #Delimiters: %d. After_string: %s", MODNAME, delimiters_found, after_string);
 
-    if (found) {
-        found = 0;
-        while (ch != '\t') {
-            i--;
-            if ((ch = temp_buffer[i]) == '\t') {
-                found = 1;
-                before_token = i;
-            }
+    while (ch != '\t' && i > 0) {
+        i--;
+        if ((ch = temp_buffer[i]) == '\t') {
+            found = 1;
+            before_token = i;
         }
-        if (found) {
-            before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
-            strncpy(before_string, temp_buffer, before_token);
-        } else {
-            ERR("Fallimento nel secondo while");
-            ret = -2; // fallimento nel secondo while
-            goto fail2;
-        }
-    } else {
-        ret = -1; // fallimento nel primo while
-        ERR("Fallimento nel primo while");
-        goto fail;
     }
+
+    before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
+    strncpy(before_string, temp_buffer, before_token);
+
     printk("%s: Before_String: %s", MODNAME, before_string);
 
     final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
@@ -485,10 +470,11 @@ int update_chrdev(int tag_minor, int level) {
     strcat(final_string, waiting);
     strcat(final_string, after_string);
 
-fail2:
+    LOG("Libero after_string");
     kfree(after_string);
-fail:
+    LOG("Libero before_string");
     kfree(before_string);
+    LOG("Libero dm->content");
     kfree(dm->content[ts->tag]);
 
     // assegno al content il mio buffer temporaneo con memory barriers
