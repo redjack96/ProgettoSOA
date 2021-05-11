@@ -519,7 +519,6 @@ void update_chrdev(int tag_minor, int level) {
     char *after_string; // Da \n del livello 'level' alla fine
     char *before_string;
     char *final_string;
-    int lev_curr_size;
     int size_riga_da_mod;
     int y;
     int all_thread_numbers_size;
@@ -550,8 +549,8 @@ void update_chrdev(int tag_minor, int level) {
 
     const_full_line = countCharsOfNumber(ts->key) + countCharsOfNumber(ts->owner_uid) + 4;
 
-    lev_curr_size = countCharsOfNumber(level);
-    size_riga_da_mod = const_full_line + lev_curr_size - 1; // escludo il \n e i thread waiting
+    size_riga_da_mod = const_full_line - 1; // escludo il livello, il \n e i thread waiting
+    all_thread_numbers_size = 0;
     for (y = 0; y < level; y++) { // Conta le cifre dei thread in attesa da 0 a level escluso
         all_thread_numbers_size += countCharsOfNumber((long) ts->level[y].thread_waiting);
     }
@@ -559,19 +558,21 @@ void update_chrdev(int tag_minor, int level) {
     before_token += header_size + level * const_full_line + (int) fastSommaDelleCifreDaZeroFinoIncluso(level) +
                     all_thread_numbers_size + size_riga_da_mod;
 
+    printk("%s: fastSommaDelleCifreDaZeroFinoIncluso(level) = %ld\n",MODNAME, fastSommaDelleCifreDaZeroFinoIncluso(level));
+    printk("%s: all_thread_numbers_size = %d\n",MODNAME, all_thread_numbers_size);
+    printk("%s: size_riga_da_mod = %d\n",MODNAME, size_riga_da_mod);
+
     before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
-    LOG("Prima strncpy");
     strncpy(before_string, temp_buffer, before_token);
-    printk("%s Before_token = %d; Before_string: %s\n", MODNAME, before_token, before_string);
+    printk("%s: Before_token = %d; Before_string: %s\n", MODNAME, before_token, before_string);
     waiting_n = ts->level[level].thread_waiting;
     waiting_n_size = countCharsOfNumber((long) waiting_n);
     sprintf(waiting, "%lu", waiting_n);
     after_string = kmalloc(sizeof(char) * (content_size - before_token - waiting_n_size + 1), GFP_ATOMIC);
-    LOG("Seconda strncpy");
-    printk("%s: Seconda strncpy (n = %lu). temp_buffer + before_token + waiting_n_size = %s\n", MODNAME, content_size - before_token - waiting_n_size, temp_buffer + before_token + waiting_n_size);
-    // Errore: non waiting_n_size ma il numero che c'era prima
-    strncpy(after_string, temp_buffer + before_token + waiting_n_size, content_size - before_token - waiting_n_size);
-    printk("%s: After_string: %s\n", MODNAME, before_string);
+    //printk("%s: Seconda strncpy (n = %lu). temp_buffer + before_token + waiting_n_size = %s\n", MODNAME, content_size - before_token - waiting_n_size, temp_buffer + before_token + waiting_n_size);
+    // FIXME: Errore: non waiting_n_size ma il numero che c'era prima
+    strncpy(after_string, temp_buffer + before_token + waiting_n_size, content_size - before_token - waiting_n_size + 1);
+    printk("%s: After_string: %s\n", MODNAME, after_string);
 
     final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
     strcat(final_string, before_string);
