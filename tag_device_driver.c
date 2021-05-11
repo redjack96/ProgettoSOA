@@ -560,12 +560,17 @@ void update_chrdev(int tag_minor, int level) {
                     all_thread_numbers_size + size_riga_da_mod;
 
     before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
+    LOG("Prima strncpy");
     strncpy(before_string, temp_buffer, before_token);
+    printk("%s Before_string: %s", MODNAME, before_string);
     waiting_n = ts->level[level].thread_waiting;
     waiting_n_size = countCharsOfNumber((long) waiting_n);
     sprintf(waiting, "%lu", waiting_n);
-    after_string = kmalloc(sizeof(char) * content_size - before_token - waiting_n_size + 1, GFP_ATOMIC);
+    after_string = kmalloc(sizeof(char) * (content_size - before_token - waiting_n_size + 1), GFP_ATOMIC);
+    LOG("Seconda strncpy");
+    // Errore: non waiting_n_size ma il numero che c'era prima
     strncpy(after_string, temp_buffer + before_token + waiting_n_size, content_size - before_token - waiting_n_size);
+    printk("%s After_string: %s", MODNAME, before_string);
 
     final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
     strcat(final_string, before_string);
