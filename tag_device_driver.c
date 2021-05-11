@@ -564,7 +564,7 @@ void update_chrdev(int tag_minor, int level) {
 
     before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
     strncpy(before_string, temp_buffer, before_token);
-    printk("%s: Before_token = %d; Before_string: %s\n", MODNAME, before_token, before_string);
+    // printk("%s: Before_token = %d; Before_string: %s\n", MODNAME, before_token, before_string);
     waiting_n = ts->level[level].thread_waiting;
     waiting_n_size = countCharsOfNumber((long) waiting_n);
     sprintf(waiting, "%lu", waiting_n);
@@ -572,7 +572,7 @@ void update_chrdev(int tag_minor, int level) {
     //printk("%s: Seconda strncpy (n = %lu). temp_buffer + before_token + waiting_n_size = %s\n", MODNAME, content_size - before_token - waiting_n_size, temp_buffer + before_token + waiting_n_size);
     // FIXME: Errore: non waiting_n_size ma il numero che c'era prima
     strncpy(after_string, temp_buffer + before_token + waiting_n_size, content_size - before_token - waiting_n_size + 1);
-    printk("%s: After_string: %s\n", MODNAME, after_string);
+    // printk("%s: After_string: %s\n", MODNAME, after_string);
 
     final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
     strcat(final_string, before_string);
