@@ -562,7 +562,7 @@ void update_chrdev(int tag_minor, int level) {
     before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
     LOG("Prima strncpy");
     strncpy(before_string, temp_buffer, before_token);
-    printk("%s Before_string: %s\n", MODNAME, before_string);
+    printk("%s Before_token = %d; Before_string: %s\n", MODNAME, before_token, before_string);
     waiting_n = ts->level[level].thread_waiting;
     waiting_n_size = countCharsOfNumber((long) waiting_n);
     sprintf(waiting, "%lu", waiting_n);
