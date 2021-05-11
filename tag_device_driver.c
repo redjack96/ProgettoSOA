@@ -556,7 +556,7 @@ void update_chrdev(int tag_minor, int level) {
         all_thread_numbers_size += countCharsOfNumber((long) ts->level[y].thread_waiting);
     }
     // Arriviamo direttamente al risultato finale, senza leggere il buffer (non so quanto mi convenga)
-    before_token += header_size + level * const_full_line + (int) fastSommaDelleCifreDaZeroFinoIncluso(level - 1) +
+    before_token += header_size + level * const_full_line + (int) fastSommaDelleCifreDaZeroFinoIncluso(level) +
                     all_thread_numbers_size + size_riga_da_mod;
 
     before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
