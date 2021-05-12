@@ -569,7 +569,7 @@ void update_chrdev(int tag_minor, int level) {
     waiting_n = ts->level[level].thread_waiting;
 
     // Leggo solo 1-3 caratteri
-    i = 0;
+    i = before_token;
     while( (ch = temp_buffer[i]) != '\n'){ //
         prev_waiting[i] = ch;
         i++;
