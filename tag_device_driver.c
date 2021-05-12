@@ -570,12 +570,16 @@ void update_chrdev(int tag_minor, int level) {
 
     // Leggo solo 1-3 caratteri
     i = before_token;
+    int j = 0;
     while( (ch = temp_buffer[i]) != '\n'){ //
-        prev_waiting[i] = ch;
+        printk("%s: ch = %c", MODNAME, ch);
+        prev_waiting[j] = ch;
         i++;
+        j++;
     }
     prev_waiting[i] = '\0';
     prev_waiting_size = countCharsOfNumber((long) prev_waiting);
+    printk("%s: prev_waiting = %s, prev_waiting_size = %d", MODNAME, prev_waiting, prev_waiting_size);
     sprintf(waiting, "%lu", waiting_n);
     after_string = kmalloc(sizeof(char) * (content_size - before_token - prev_waiting_size + 1), GFP_ATOMIC);
     //printk("%s: Seconda strncpy (n = %lu). temp_buffer + before_token + prev_waiting_size = %s\n", MODNAME, content_size - before_token - prev_waiting_size, temp_buffer + before_token + prev_waiting_size);
