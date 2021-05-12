@@ -572,9 +572,9 @@ void update_chrdev(int tag_minor, int level) {
 
 
     // Suddividi la stringa in tre parti e poi uniscile:
-    // La parte prima dei thread in attesa (fino al terzo \t incluso)
-    // Il numero di nuovi thread in attesa
-    // La parte dal \n in poi
+    // Stringa 1: La parte prima dei thread in attesa (fino al terzo \t incluso)
+    // Stringa 2: Il numero di nuovi thread in attesa
+    // Stringa 3: La parte dal \n in poi
 
     before_token = 0;
 
@@ -590,11 +590,12 @@ void update_chrdev(int tag_minor, int level) {
     before_token += header_size + level * const_full_line + (int) fastSommaDelleCifreDaZeroFinoIncluso(level) +
                     all_thread_numbers_size + size_riga_da_mod;
 
+    // Stringa 1 - Dall'inizio fino al terzo \t nella riga corrispondente a [level]
     before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
     strncpy(before_string, temp_buffer, before_token);
-    waiting_n = ts->level[level].thread_waiting;
 
-    // Leggo solo 1-3 caratteri, per ricavare il precedente livello...
+    // Stringa 2 - Leggo solo 1-3 caratteri, per ricavare il precedente livello...
+    waiting_n = ts->level[level].thread_waiting;
     i = before_token;
     j = 0;
     while ((ch = temp_buffer[i]) != '\n') { //
@@ -605,9 +606,11 @@ void update_chrdev(int tag_minor, int level) {
     }
     prev_waiting[j] = '\0';
 
+    // ricavo il precedente numero di thread in attesa dalla stringa, lo traduco in numero e poi conto i suoi caratteri
     prev_waiting_size = countCharsOfNumber((long) my_atoi(prev_waiting));
     sprintf(waiting, "%lu", waiting_n);
 
+    // String 3 - Alla riga corrispondente al livello [level] da \n alla fine.
     after_string = kmalloc(sizeof(char) * (content_size - before_token - prev_waiting_size + 1), GFP_ATOMIC);
     strncpy(after_string, temp_buffer + before_token + prev_waiting_size, content_size - before_token - prev_waiting_size + 1);
 
@@ -616,11 +619,13 @@ void update_chrdev(int tag_minor, int level) {
     strcat(final_string, waiting);
     strcat(final_string, after_string);
 
-    kfree(after_string);
-    kfree(before_string);
     kfree(dm->content[ts->tag]);
 
     // assegno al content il mio buffer temporaneo con memory barriers
     rcu_assign_pointer(dm->content[ts->tag], final_string);
     mutex_unlock(&dm->device_lock[ts->tag]);
+
+    // Questo lo posso fare anche dopo...
+    kfree(after_string);
+    kfree(before_string);
 }
