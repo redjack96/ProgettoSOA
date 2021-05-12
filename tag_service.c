@@ -518,7 +518,7 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, 
     atomic_inc((atomic_t *) &(ts->level[level].thread_waiting));
 
 
-    // Aggiorna il char device ricostruendoo la stringa
+    // Aggiorna il char device ricostruendo la stringa
     update_chrdev(tag, level);
 
     /*

@@ -558,7 +558,7 @@ void update_chrdev(int tag_minor, int level) {
     before_token += header_size + level * const_full_line + (int) fastSommaDelleCifreDaZeroFinoIncluso(level) +
                     all_thread_numbers_size + size_riga_da_mod;
 
-    printk("%s: fastSommaDelleCifreDaZeroFinoIncluso(level) = %ld\n",MODNAME, fastSommaDelleCifreDaZeroFinoIncluso(level));
+    printk("%s: fastSommaDelleCifreDaZeroFinoIncluso(%d) = %ld\n",MODNAME,level, fastSommaDelleCifreDaZeroFinoIncluso(level));
     printk("%s: all_thread_numbers_size = %d\n",MODNAME, all_thread_numbers_size);
     printk("%s: size_riga_da_mod = %d\n",MODNAME, size_riga_da_mod);
 

@@ -472,7 +472,6 @@ void *thread_receiver5(void *tag) {
 int readCharDev(char *returned, const char *path) {
     FILE *f;
     int retry = 0;
-    char *path = "/dev/tsdev_205";
     /* Il seguente ciclo serve per aspettare che i permessi del char device siano effettivamente cambiati */
 
     while (access(path, R_OK) == -1);
@@ -934,12 +933,7 @@ int chrdev_10_or_more_waiting_test9(int threads, int level) {
     char *read_string = malloc(sizeof(char) * 4096);
 
     char *header = "KEY\tEUID\tLEVEL\t#THREADS\n";
-    char line[100];
-    strncpy(correct_string, header, strlen(header));
-    for (i = 0; i < MAX_LEVELS; i++) {
-        snprintf(line, 100, "%ld\t%d\t%d\t%d\n", tag, geteuid(), i, (i == level ? threads : 0));
-        strncat(correct_string, line, strlen(line));
-    }
+    char line[64];
 
     thread_received9 = 0;
 
@@ -948,8 +942,14 @@ int chrdev_10_or_more_waiting_test9(int threads, int level) {
         FAILURE;
     }
 
+    strncpy(correct_string, header, strlen(header));
+    for (i = 0; i < MAX_LEVELS; i++) {
+        snprintf(line, 64, "%ld\t%d\t%d\t%d\n", tag, geteuid(), i, (i == level ? threads : 0));
+        strncat(correct_string, line, strlen(line));
+    }
+
     for (i = 0; i < threads; i++) {
-        pthread_create(&tid[i], NULL, waiting_thread, (void *) tag);
+        pthread_create(&tid[i], NULL, waiting_thread, (void *) (long) level);
     }
 
     while (thread_received9 < threads);
@@ -974,6 +974,8 @@ int chrdev_10_or_more_waiting_test9(int threads, int level) {
     if (ok && strncmp(correct_string, read_string, strlen(correct_string)) == 0) {
         SUCCESS;
     } else {
+        printf("chrdev_10_or_more_waiting_test9: stringa sbagliata \n%s", read_string);
+        printf("chrdev_10_or_more_waiting_test9: la stringa doveva essere\n%s", correct_string);
         FAILURE;
     }
 
