@@ -512,7 +512,7 @@ void update_chrdev(int tag_minor, int level) {
     tag_service *ts;
     char waiting[10];
     unsigned long waiting_n;
-    int waiting_n_size;
+    int prev_waiting_size;
     char *temp_buffer;
     size_t content_size;
     int before_token; // Posizione del terzo \t del livello 'level'
@@ -520,10 +520,11 @@ void update_chrdev(int tag_minor, int level) {
     char *before_string;
     char *final_string;
     int size_riga_da_mod;
-    int y;
+    int y, i;
+    char ch;
     int all_thread_numbers_size;
     int const_full_line;
-
+    char prev_waiting[10];
     ts = tsm->all_tag_services[tag_minor];
 
     temp_buffer = kmalloc(BUFSIZE * sizeof(char), GFP_KERNEL);
@@ -566,12 +567,20 @@ void update_chrdev(int tag_minor, int level) {
     strncpy(before_string, temp_buffer, before_token);
     // printk("%s: Before_token = %d; Before_string: %s\n", MODNAME, before_token, before_string);
     waiting_n = ts->level[level].thread_waiting;
-    waiting_n_size = countCharsOfNumber((long) waiting_n);
+
+    // Leggo solo 1-3 caratteri
+    i = 0;
+    while( (ch = temp_buffer[i]) != '\n'){ //
+        prev_waiting[i] = ch;
+        i++;
+    }
+    prev_waiting[i] = '\0';
+    prev_waiting_size = countCharsOfNumber((long) prev_waiting);
     sprintf(waiting, "%lu", waiting_n);
-    after_string = kmalloc(sizeof(char) * (content_size - before_token - waiting_n_size + 1), GFP_ATOMIC);
-    //printk("%s: Seconda strncpy (n = %lu). temp_buffer + before_token + waiting_n_size = %s\n", MODNAME, content_size - before_token - waiting_n_size, temp_buffer + before_token + waiting_n_size);
-    // FIXME: Errore: non waiting_n_size ma il numero che c'era prima
-    strncpy(after_string, temp_buffer + before_token + waiting_n_size, content_size - before_token - waiting_n_size + 1);
+    after_string = kmalloc(sizeof(char) * (content_size - before_token - prev_waiting_size + 1), GFP_ATOMIC);
+    //printk("%s: Seconda strncpy (n = %lu). temp_buffer + before_token + prev_waiting_size = %s\n", MODNAME, content_size - before_token - prev_waiting_size, temp_buffer + before_token + prev_waiting_size);
+    // FIXME: Errore: non prev_waiting_size ma il numero che c'era prima
+    strncpy(after_string, temp_buffer + before_token + prev_waiting_size, content_size - before_token - prev_waiting_size + 1);
     // printk("%s: After_string: %s\n", MODNAME, after_string);
 
     final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);

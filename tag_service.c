@@ -551,7 +551,7 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, 
         atomic_dec((atomic_t *) &ts->thread_waiting_message_count);
         atomic_dec((atomic_t *) &ts->level[level].thread_waiting);
         update_chrdev(tag, level);
-        printk("%s: thread (pid = %d) - svegliato da comando AWAKE_ALL. Esco senza messaggi(thread rimasti in attesa nel tag: %lu})\n",
+        printk("%s: thread (pid = %d) - svegliato da comando AWAKE_ALL. Esco senza messaggi{thread rimasti in attesa nel tag: %lu}\n",
                MODNAME, current->pid, ts->thread_waiting_message_count);
         module_put(THIS_MODULE);
         return -EINTR; // Interrupted system call
