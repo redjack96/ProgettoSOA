@@ -17,13 +17,12 @@
 #define NOT_OK (void *) 0
 #define AUDIT if(0)
 
-// char *semaName = "sharedSemaphore";
 static int thread_received1 = 0;
 static int thread_received2 = 0;
 static int thread_received3 = 0;
 static int thread_received4 = 0;
 static int thread_received5 = 0;
-static int thread_received6 = 0;
+static int thread_received9 = 0;
 
 void *thread_receiver_test1(void *tag) {
     long ret;
@@ -467,15 +466,16 @@ void *thread_receiver5(void *tag) {
     return (void *) OK;
 }
 
-int readCharDev(char *returned) {
+/**
+ * Legge la stringa del char device e la salva nel parametro in input
+ */
+int readCharDev(char *returned, const char *path) {
     FILE *f;
     int retry = 0;
     char *path = "/dev/tsdev_205";
     /* Il seguente ciclo serve per aspettare che i permessi del char device siano effettivamente cambiati */
-    do {
-        if (retry) sleep(1);
-        retry = access(path, R_OK);
-    } while (retry == -1);
+
+    while (access(path, R_OK) == -1);
 
     f = fopen(path, "r");
     if (f == NULL) {
@@ -520,7 +520,7 @@ int device_write_test5(int thread_number, int minuti) {
         thread_number = 2;
     }
     int times = 0;
-retry:
+    retry:
     tag = tag_get(205, CREATE_TAG, EVERYONE);
     if (tag < 0 && errno != ENOSYS) {
         perror("device_write_test5: tag_get");
@@ -548,7 +548,7 @@ retry:
     while (thread_received5 != thread_number);
 
     sleep(60 * minuti); // Controllare durante questo tempo se il char device funziona correttamente
-    if (readCharDev((char *) chdev_content) == -1) {
+    if (readCharDev((char *) chdev_content, "/dev/tsdev_205") == -1) {
         printf("Errore nella prima readCharDev\n");
         tag_ctl((int) tag, AWAKE_ALL);
         tag_ctl((int) tag, REMOVE_TAG);
@@ -564,7 +564,7 @@ retry:
         pthread_join(tid[i], &returns[i]);
     }
 
-    if (readCharDev((char *) chdev_content) == -1) {
+    if (readCharDev((char *) chdev_content, "/dev/tsdev_205") == -1) {
         printf("Errore nella seconda readCharDev\n");
         goto elimina;
     }
@@ -599,8 +599,6 @@ int signal_test6() {
     long tag;
     pid_t pid;
     int returns;
-
-    thread_received6 = 0;
 
     sem_t *sem;
     sem = sem_open("semaforo6", O_CREAT, 0666, 0);
@@ -782,7 +780,7 @@ void copyFile(char *source, char *destination, int i) {
 void *read_chrdev_thread(void *i) {
     char *chrdev_content;
     char path[20];
-    AUDIT printf("Thread lettore %ld\n", (long)  i);
+    AUDIT printf("Thread lettore %ld\n", (long) i);
     chrdev_content = malloc(sizeof(char) * 4096);
     if (!chrdev_content) {
         printf("Errore nella malloc nel thread ");
@@ -856,7 +854,7 @@ int chrdev_rw_test8(const int threadTrios) {
     system("rm -f tsdev_log*");
 
     // Se non sono SUDO, aspetto che il file abbia i permessi in lettura...
-    if(!(getuid() == 0 || geteuid() == 0))
+    if (!(getuid() == 0 || geteuid() == 0))
         while (access("/dev/tsdev_208", R_OK) == -1);
 
     for (i = 0; i < threadTrios * 3; i++) {
@@ -904,4 +902,79 @@ int chrdev_rw_test8(const int threadTrios) {
     } else {
         FAILURE;
     }
+}
+
+void *waiting_thread(void *level) {
+    int tag = 210;
+    char buff[10];
+
+    __sync_fetch_and_add(&thread_received9, 1);
+
+    if (tag_receive(tag, (int) (long) level, buff, 10) == -1 && errno != EINTR) {
+        perror("chrdev_10_or_more_waiting_test9 [THREAD FIGLIO]: errore nella tag_receive");
+        return NOT_OK;
+    }
+
+    return OK;
+}
+
+/**
+ * Fa attendere n thread in un singolo livello e legge il contenuto del buffer, verificando che sia corretto.
+ * @return
+ */
+int chrdev_10_or_more_waiting_test9(int threads, int level) {
+    long tag;
+    pthread_t tid[threads];
+    void *thread_return[threads];
+    int key;
+    key = 210;
+    int ok = 1;
+    int i;
+    char *correct_string = malloc(sizeof(char) * 4096);
+    char *read_string = malloc(sizeof(char) * 4096);
+
+    char *header = "KEY\tEUID\tLEVEL\t#THREADS\n";
+    char line[100];
+    strncpy(correct_string, header, strlen(header));
+    for (i = 0; i < MAX_LEVELS; i++) {
+        snprintf(line, 100, "%ld\t%d\t%d\t%d\n", tag, geteuid(), i, (i == level ? threads : 0));
+        strncat(correct_string, line, strlen(line));
+    }
+
+    thread_received9 = 0;
+
+    if ((tag = tag_get(key, CREATE_TAG, EVERYONE)) == -1) {
+        perror("chrdev_10_or_more_waiting_test9: errore nella tag_get");
+        FAILURE;
+    }
+
+    for (i = 0; i < threads; i++) {
+        pthread_create(&tid[i], NULL, waiting_thread, (void *) tag);
+    }
+
+    while (thread_received9 < threads);
+
+    readCharDev(read_string, "/dev/tsdev_210");
+
+    if (tag_ctl((int) tag, AWAKE_ALL) == -1) {
+        perror("chrdev_10_or_more_waiting_test9: errore nella REMOVE_TAG");
+        FAILURE;
+    }
+
+    for (i = 0; i < threads; i++) {
+        pthread_join(tid[i], &thread_return[i]);
+        ok = ok && thread_return[i] == OK;
+    }
+
+    if (tag_ctl((int) tag, REMOVE_TAG) == -1) {
+        perror("chrdev_10_or_more_waiting_test9: errore nella REMOVE_TAG");
+        FAILURE;
+    }
+
+    if (ok && strncmp(correct_string, read_string, strlen(correct_string)) == 0) {
+        SUCCESS;
+    } else {
+        FAILURE;
+    }
+
 }
