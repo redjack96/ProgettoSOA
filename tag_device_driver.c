@@ -79,6 +79,43 @@ long fastSommaDelleCifreDaZeroFinoIncluso(long n) {
 }
 
 /**
+ * O(N) traduce una stringa in numero.
+ * @param str
+ * @return
+ */
+int my_atoi(const char *str) {
+    int sign, base, i;
+    sign = 1;
+    base = 0;
+    i = 0;
+
+    // if whitespaces then ignore.
+    while (str[i] == ' ' || str[i] == '\t') {
+        i++;
+    }
+
+    // sign of number
+    if (str[i] == '-' || str[i] == '+') {
+        sign = 1 - 2 * (str[i++] == '-');
+    }
+
+    // checking for valid input
+    while (str[i] >= '0' && str[i] <= '9') {
+        // handling overflow test case
+        if (base > INT_MAX / 10
+            || (base == INT_MAX / 10
+                && str[i] - '0' > 7)) {
+            if (sign == 1)
+                return INT_MAX;
+            else
+                return INT_MIN;
+        }
+        base = 10 * base + (str[i++] - '0');
+    }
+    return base * sign;
+}
+
+/**
  * Permette di impostare i permessi di tutti i char device con la classe ts_class, in modo tale da
  * poter essere LETTI (e solo letti) da chiunque, anche senza SUDO */
 int my_dev_uevent(struct device *dev, struct kobj_uevent_env *env) {
@@ -257,7 +294,6 @@ int ts_create_char_device_file(int tag_minor) {
     char line[100];
     tag_service *ts;
     //char *temp_buffer;
-    char *header = "KEY\tEUID\tLEVEL\t#THREADS\n"; // Header per il buffer del char device
 
     BUG_ON(ts_class == NULL);
 
@@ -520,7 +556,7 @@ void update_chrdev(int tag_minor, int level) {
     char *before_string;
     char *final_string;
     int size_riga_da_mod;
-    int y, i;
+    int j, y, i;
     char ch;
     int all_thread_numbers_size;
     int const_full_line;
@@ -559,9 +595,10 @@ void update_chrdev(int tag_minor, int level) {
     before_token += header_size + level * const_full_line + (int) fastSommaDelleCifreDaZeroFinoIncluso(level) +
                     all_thread_numbers_size + size_riga_da_mod;
 
-    printk("%s: fastSommaDelleCifreDaZeroFinoIncluso(%d) = %ld\n",MODNAME,level, fastSommaDelleCifreDaZeroFinoIncluso(level));
-    printk("%s: all_thread_numbers_size = %d\n",MODNAME, all_thread_numbers_size);
-    printk("%s: size_riga_da_mod = %d\n",MODNAME, size_riga_da_mod);
+    printk("%s: fastSommaDelleCifreDaZeroFinoIncluso(%d) = %ld\n", MODNAME, level,
+           fastSommaDelleCifreDaZeroFinoIncluso(level));
+    printk("%s: all_thread_numbers_size = %d\n", MODNAME, all_thread_numbers_size);
+    printk("%s: size_riga_da_mod = %d\n", MODNAME, size_riga_da_mod);
 
     before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
     strncpy(before_string, temp_buffer, before_token);
@@ -570,21 +607,25 @@ void update_chrdev(int tag_minor, int level) {
 
     // Leggo solo 1-3 caratteri
     i = before_token;
-    int j = 0;
-    while( (ch = temp_buffer[i]) != '\n'){ //
-        printk("%s: ch = %c", MODNAME, ch);
+    j = 0;
+    while ((ch = temp_buffer[i]) != '\n') { //
+        printk("%s: ch = %c\n", MODNAME, ch);
         prev_waiting[j] = ch;
         i++;
         j++;
+        if (ch == 0 || j > 10) break;
     }
-    prev_waiting[i] = '\0';
-    prev_waiting_size = countCharsOfNumber((long) prev_waiting);
-    printk("%s: prev_waiting = %s, prev_waiting_size = %d", MODNAME, prev_waiting, prev_waiting_size);
+    prev_waiting[j] = '\0';
+
+    prev_waiting_size = countCharsOfNumber((long) my_atoi(prev_waiting));
+    printk("%s: prev_waiting = %s, prev_waiting_size = %d\n", MODNAME, prev_waiting, prev_waiting_size);
     sprintf(waiting, "%lu", waiting_n);
+
     after_string = kmalloc(sizeof(char) * (content_size - before_token - prev_waiting_size + 1), GFP_ATOMIC);
     //printk("%s: Seconda strncpy (n = %lu). temp_buffer + before_token + prev_waiting_size = %s\n", MODNAME, content_size - before_token - prev_waiting_size, temp_buffer + before_token + prev_waiting_size);
     // FIXME: Errore: non prev_waiting_size ma il numero che c'era prima
-    strncpy(after_string, temp_buffer + before_token + prev_waiting_size, content_size - before_token - prev_waiting_size + 1);
+    strncpy(after_string, temp_buffer + before_token + prev_waiting_size,
+            content_size - before_token - prev_waiting_size + 1);
     // printk("%s: After_string: %s\n", MODNAME, after_string);
 
     final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
