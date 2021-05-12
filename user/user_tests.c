@@ -80,17 +80,7 @@ void all_tests() {
 int main() {
 
     printf("user=%d, effective user = %d\n", getuid(), geteuid());
-    // all_tests();
-    // TUTTI OK
-    chrdev_10_or_more_waiting_test9(1,0);
-    chrdev_10_or_more_waiting_test9(1,5);
-    chrdev_10_or_more_waiting_test9(1,15);
-    chrdev_10_or_more_waiting_test9(1,MAX_LEVELS - 1);
-    // ERRORE
-    chrdev_10_or_more_waiting_test9(10, 5); // Con 10 mangia il \n, con 100 mangia il \n e il numero successivo...
-    chrdev_10_or_more_waiting_test9(10, 5);
-    chrdev_10_or_more_waiting_test9(10, 15);
-    chrdev_10_or_more_waiting_test9(10, MAX_LEVELS - 1);
+    all_tests();
 
 #define CHECK_DEVICE 0
 #if (CHECK_DEVICE == 1)

@@ -470,7 +470,7 @@ void destroy_driver_and_all_devices(void) {
  * - Viene chiamata da tag_get quando crea il tag_service
  * - Viene chiamata da tag_receive quando un thread entra o esce dall'attesa.
  *
- * FIXME: l'unica cosa che cambia
+ * FIX: l'unica cosa che cambia e' il numero di thread in ricezione nel livello specificato
  *
  * @param tag_minor il tag service/char device a cui cambiare la stringa
  */
@@ -576,14 +576,9 @@ void update_chrdev(int tag_minor, int level) {
     // Il numero di nuovi thread in attesa
     // La parte dal \n in poi
 
-    // DOING==================: possibilmente, arrivare direttamente, senza ciclo while, al punto in cui suddividere la stringa
-    // Voglio arrivare al terzo \t del livello specificato.
-    // In particolare se il livello e' [level] voglio la riga [level]+2
-
-
     before_token = 0;
-    // Costante in ogni riga completa, compresi i 3 tab e il \n
 
+    // Numero di caratteri, costante in ogni riga completa, compresi i 3 tab e il \n
     const_full_line = countCharsOfNumber(ts->key) + countCharsOfNumber(ts->owner_uid) + 4;
 
     size_riga_da_mod = const_full_line - 1; // escludo il livello, il \n e i thread waiting
@@ -595,21 +590,14 @@ void update_chrdev(int tag_minor, int level) {
     before_token += header_size + level * const_full_line + (int) fastSommaDelleCifreDaZeroFinoIncluso(level) +
                     all_thread_numbers_size + size_riga_da_mod;
 
-    printk("%s: fastSommaDelleCifreDaZeroFinoIncluso(%d) = %ld\n", MODNAME, level,
-           fastSommaDelleCifreDaZeroFinoIncluso(level));
-    printk("%s: all_thread_numbers_size = %d\n", MODNAME, all_thread_numbers_size);
-    printk("%s: size_riga_da_mod = %d\n", MODNAME, size_riga_da_mod);
-
     before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
     strncpy(before_string, temp_buffer, before_token);
-    // printk("%s: Before_token = %d; Before_string: %s\n", MODNAME, before_token, before_string);
     waiting_n = ts->level[level].thread_waiting;
 
-    // Leggo solo 1-3 caratteri
+    // Leggo solo 1-3 caratteri, per ricavare il precedente livello...
     i = before_token;
     j = 0;
     while ((ch = temp_buffer[i]) != '\n') { //
-        printk("%s: ch = %c\n", MODNAME, ch);
         prev_waiting[j] = ch;
         i++;
         j++;
@@ -618,15 +606,10 @@ void update_chrdev(int tag_minor, int level) {
     prev_waiting[j] = '\0';
 
     prev_waiting_size = countCharsOfNumber((long) my_atoi(prev_waiting));
-    printk("%s: prev_waiting = %s, prev_waiting_size = %d\n", MODNAME, prev_waiting, prev_waiting_size);
     sprintf(waiting, "%lu", waiting_n);
 
     after_string = kmalloc(sizeof(char) * (content_size - before_token - prev_waiting_size + 1), GFP_ATOMIC);
-    //printk("%s: Seconda strncpy (n = %lu). temp_buffer + before_token + prev_waiting_size = %s\n", MODNAME, content_size - before_token - prev_waiting_size, temp_buffer + before_token + prev_waiting_size);
-    // FIXME: Errore: non prev_waiting_size ma il numero che c'era prima
-    strncpy(after_string, temp_buffer + before_token + prev_waiting_size,
-            content_size - before_token - prev_waiting_size + 1);
-    // printk("%s: After_string: %s\n", MODNAME, after_string);
+    strncpy(after_string, temp_buffer + before_token + prev_waiting_size, content_size - before_token - prev_waiting_size + 1);
 
     final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
     strcat(final_string, before_string);
