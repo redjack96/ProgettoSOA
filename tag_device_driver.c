@@ -345,11 +345,11 @@ int ts_create_char_device_file(int tag_minor) {
 
         // Numero di cifre
         int num1 = countCharsOfNumber(MAX_TAG_SERVICES); // es. per 512, num1 = 3
-        int num2 = countCharsOfNumber(ts->owner_uid);
+        int num2 = countCharsOfNumber(ts->owner_euid);
         int num3 = countCharsOfNumber(MAX_LEVELS);
         int num4 = countCharsOfNumber((long) ts->level[i].thread_waiting);
 
-        snprintf(line, num1 + num2 + num3 + num4 + 5, "%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i,
+        snprintf(line, num1 + num2 + num3 + num4 + 5, "%d\t%d\t%d\t%lu\n", ts->key, ts->owner_euid, i,
                  ts->level[i].thread_waiting);
         strncat(dm->content[tag_minor], line, strlen(line));
     }
@@ -579,7 +579,7 @@ void update_chrdev(int tag_minor, int level) {
     before_token = 0;
 
     // Numero di caratteri, costante in ogni riga completa, compresi i 3 tab e il \n
-    const_full_line = countCharsOfNumber(ts->key) + countCharsOfNumber(ts->owner_uid) + 4;
+    const_full_line = countCharsOfNumber(ts->key) + countCharsOfNumber(ts->owner_euid) + 4;
 
     size_riga_da_mod = const_full_line - 1; // escludo il livello, il \n e i thread waiting
     all_thread_numbers_size = 0;

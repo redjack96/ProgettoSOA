@@ -921,7 +921,7 @@ void *waiting_thread(void *level) {
  * Fa attendere n thread in un singolo livello e legge il contenuto del buffer, verificando che sia corretto.
  * @return
  */
-int chrdev_10_or_more_waiting_test9(int threads, int level) {
+int chrdev_10_or_more_waiting_test9(int threads, int level, int same_level) {
     long tag;
     pthread_t tid[threads];
     void *thread_return[threads];
@@ -944,12 +944,17 @@ int chrdev_10_or_more_waiting_test9(int threads, int level) {
 
     strncpy(correct_string, header, strlen(header));
     for (i = 0; i < MAX_LEVELS; i++) {
-        snprintf(line, 64, "%ld\t%d\t%d\t%d\n", tag, geteuid(), i, (i == level ? threads : 0));
+        if (same_level) {
+            snprintf(line, 64, "%ld\t%d\t%d\t%d\n", tag, geteuid(), i, (i == level ? threads : 0));
+        } else {
+            snprintf(line, 64, "%ld\t%d\t%d\t%d\n", tag, geteuid(), i,
+                     threads / MAX_LEVELS + (threads % MAX_LEVELS > i ? 1 : 0));
+        }
         strncat(correct_string, line, strlen(line));
     }
 
     for (i = 0; i < threads; i++) {
-        pthread_create(&tid[i], NULL, waiting_thread, (void *) (long) level);
+        pthread_create(&tid[i], NULL, waiting_thread, (void *) (long) (same_level ? level : (i % MAX_LEVELS)));
     }
 
     while (thread_received9 < threads);
