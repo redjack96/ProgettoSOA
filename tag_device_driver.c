@@ -587,7 +587,7 @@ void update_chrdev(int tag_minor, int level) {
 
     // Arriviamo direttamente al risultato finale, senza leggere il buffer (non so quanto mi convenga)
     before_token = header_size + level * const_full_line + (int) fastSommaDelleCifreDaZeroFinoIncluso(level) +
-                    all_thread_numbers_size + size_riga_da_mod;
+                   all_thread_numbers_size + size_riga_da_mod;
 
 
 
@@ -618,14 +618,8 @@ void update_chrdev(int tag_minor, int level) {
 
     // String 3 - Alla riga corrispondente al livello [level] da \n alla fine.
     after_string = kmalloc(sizeof(char) * (content_size - before_token - prev_waiting_size + 1), GFP_ATOMIC);
-    strncpy(after_string, temp_buffer + before_token + prev_waiting_size, content_size - before_token - prev_waiting_size + 1);
-
-    mutex_unlock(&dm->device_lock[ts->tag]); // TODO: TOGLI, SOLO PER TROVARE ERRORE
-    printk("%s: before_token = %d, owner_euid %d, prev_waiting: %s prev_waiting_size: %d before_string&after_string: %s\n%s\n",MODNAME, before_token, ts->owner_euid, prev_waiting, prev_waiting_size,before_string, after_string);
-    printk("%s: content_size(%zu) - before_token(%d) - prev_waiting_size(%d) + 1 = %lu\n",MODNAME, content_size, before_token, prev_waiting_size, content_size - before_token - prev_waiting_size + 1);
-    kfree(before_string);
-    kfree(after_string);
-    kfree(temp_buffer);/*
+    strncpy(after_string, temp_buffer + before_token + prev_waiting_size,
+            content_size - before_token - prev_waiting_size + 1);
 
     final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
     strcat(final_string, before_string);
@@ -638,6 +632,15 @@ void update_chrdev(int tag_minor, int level) {
     rcu_assign_pointer(dm->content[ts->tag], final_string);
     mutex_unlock(&dm->device_lock[ts->tag]);
 
+    // TODO: TOGLI, SOLO PER TROVARE ERRORE
+    printk("%s: before_token = %d, owner_euid %d, prev_waiting: %s prev_waiting_size: %d content_size(%zu) - before_token(%d) - prev_waiting_size(%d) + 1 = %lu final_string: \n%s",
+           MODNAME, before_token, ts->owner_euid, prev_waiting, prev_waiting_size, content_size, before_token,
+           prev_waiting_size, content_size - before_token - prev_waiting_size + 1, final_string);
+    kfree(before_string);
+    kfree(after_string);
+    // kfree(temp_buffer);
+    // kfree(final_string);
+    /*
     // Questo lo posso fare anche dopo...
     kfree(after_string);
     kfree(before_string);*/
