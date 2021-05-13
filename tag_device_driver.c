@@ -345,11 +345,11 @@ int ts_create_char_device_file(int tag_minor) {
 
         // Numero di cifre
         int num1 = countCharsOfNumber(MAX_TAG_SERVICES); // es. per 512, num1 = 3
-        int num2 = countCharsOfNumber(ts->owner_uid);
+        int num2 = countCharsOfNumber(ts->owner_euid);
         int num3 = countCharsOfNumber(MAX_LEVELS);
         int num4 = countCharsOfNumber((long) ts->level[i].thread_waiting);
 
-        snprintf(line, num1 + num2 + num3 + num4 + 5, "%d\t%d\t%d\t%lu\n", ts->key, ts->owner_uid, i,
+        snprintf(line, num1 + num2 + num3 + num4 + 5, "%d\t%d\t%d\t%lu\n", ts->key, ts->owner_euid, i,
                  ts->level[i].thread_waiting);
         strncat(dm->content[tag_minor], line, strlen(line));
     }
@@ -576,23 +576,27 @@ void update_chrdev(int tag_minor, int level) {
     // Stringa 2: Il numero di nuovi thread in attesa
     // Stringa 3: La parte dal \n in poi
 
-    before_token = 0;
-
     // Numero di caratteri, costante in ogni riga completa, compresi i 3 tab e il \n
-    const_full_line = countCharsOfNumber(ts->key) + countCharsOfNumber(ts->owner_uid) + 4;
+    const_full_line = countCharsOfNumber(ts->key) + countCharsOfNumber(ts->owner_euid) + 4;
 
     size_riga_da_mod = const_full_line - 1; // escludo il livello, il \n e i thread waiting
     all_thread_numbers_size = 0;
     for (y = 0; y < level; y++) { // Conta le cifre dei thread in attesa da 0 a level escluso
         all_thread_numbers_size += countCharsOfNumber((long) ts->level[y].thread_waiting);
     }
+
     // Arriviamo direttamente al risultato finale, senza leggere il buffer (non so quanto mi convenga)
-    before_token += header_size + level * const_full_line + (int) fastSommaDelleCifreDaZeroFinoIncluso(level) +
+    before_token = header_size + level * const_full_line + (int) fastSommaDelleCifreDaZeroFinoIncluso(level) +
                     all_thread_numbers_size + size_riga_da_mod;
+
+
+
 
     // Stringa 1 - Dall'inizio fino al terzo \t nella riga corrispondente a [level]
     before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
     strncpy(before_string, temp_buffer, before_token);
+
+
 
     // Stringa 2 - Leggo solo 1-3 caratteri, per ricavare il precedente livello...
     waiting_n = ts->level[level].thread_waiting;
@@ -605,6 +609,11 @@ void update_chrdev(int tag_minor, int level) {
         if (ch == 0 || j > 10) break;
     }
     prev_waiting[j] = '\0';
+
+    mutex_unlock(&dm->device_lock[ts->tag]); // TODO: TOGLI, SOLO PER TROVARE ERRORE
+    printk("before_token = %d, owner_euid %d, before_string:\n %s", before_token, ts->owner_euid, before_string);
+    kfree(before_string);
+    kfree(temp_buffer);/*
 
     // ricavo il precedente numero di thread in attesa dalla stringa, lo traduco in numero e poi conto i suoi caratteri
     prev_waiting_size = countCharsOfNumber((long) my_atoi(prev_waiting));
@@ -627,5 +636,5 @@ void update_chrdev(int tag_minor, int level) {
 
     // Questo lo posso fare anche dopo...
     kfree(after_string);
-    kfree(before_string);
+    kfree(before_string);*/
 }
