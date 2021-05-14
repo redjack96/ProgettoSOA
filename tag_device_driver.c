@@ -546,8 +546,8 @@ int update_chrdev(int tag_minor, int level) {
     // assegno al content il mio buffer temporaneo con memory barriers
     rcu_assign_pointer(dm->content[ts->tag], final_string);
     mutex_unlock(&dm->device_lock[ts->tag]);
-    printk("%s: before_token = %d, before_string:\n%s\nnumero thread in attesa: %s, after_string:\n%s",
-           MODNAME, before_token, before_string, waiting, after_string);
+    /*printk("%s: before_token = %d, before_string:\n%s\nnumero thread in attesa: %s, after_string:\n%s",
+           MODNAME, before_token, before_string, waiting, after_string);*/
     // After string viene
     kfree(before_string);
     kfree(after_string);
@@ -652,8 +652,4 @@ int update_chrdev(int tag_minor, int level) {
     kfree(after_string);
     // kfree(temp_buffer);
     // kfree(final_string);
-    *//*
-    // Questo lo posso fare anche dopo...
-    kfree(after_string);
-    kfree(before_string);*//*
 }*/

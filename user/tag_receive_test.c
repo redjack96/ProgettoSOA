@@ -9,13 +9,13 @@
 #include <errno.h>
 #include <pthread.h>
 #include <fcntl.h>
-#include <syscall.h>
 #include <sys/time.h>
 #include "tag_receive_test.h"
 
 #define OK (void *) 1
 #define NOT_OK (void *) 0
 #define AUDIT if(0)
+#define GETTID 186
 
 static int thread_received1 = 0;
 static int thread_received2 = 0;
@@ -457,11 +457,11 @@ void *thread_receiver5(void *tag) {
     ret = tag_receive((int) (long) tag, 5, buffer, 500);
 
     if (ret < 0 && errno == EINTR) {
-        printf("Thread %ld svegliato da AWAKE_ALL\n", (long) syscall(__NR_gettid));
+        printf("Thread %ld svegliato da AWAKE_ALL\n", (long) syscall(GETTID));
         return OK;
     } else if (ret < 0) {
         char messaggio[80];
-        sprintf(messaggio, "device_write_test5: Errore di ricezione nel thread %ld", (long) syscall(__NR_gettid));
+        sprintf(messaggio, "device_write_test5: Errore di ricezione nel thread %ld", (long) syscall(GETTID));
         perror(messaggio);
         return NOT_OK;
     }
@@ -936,11 +936,16 @@ int chrdev_waiting_test9(int threads, int level, int same_level) {
     key = 210;
     int ok = 1;
     int i;
-    char correct_string[1024];
-    char read_string[1024];
+    char correct_string[4096];
+    char read_string[2048];
 
     char *header = "KEY\tEUID\tLEVEL\t#THREADS\n";
     char line[64];
+
+    // Azzero le mie due stringhe, per non avere garbage all'interno.
+    explicit_bzero(correct_string, 4096);
+    explicit_bzero(read_string, 2048);
+    explicit_bzero(line, 64);
 
     thread_received9 = 0;
 
@@ -958,6 +963,7 @@ int chrdev_waiting_test9(int threads, int level, int same_level) {
                      threads / MAX_LEVELS + (threads % MAX_LEVELS > i ? 1 : 0));
         }
         strncat(correct_string, line, strlen(line));
+        explicit_bzero(line, 64);
     }
 
     for (i = 0; i < threads; i++) {
@@ -967,6 +973,8 @@ int chrdev_waiting_test9(int threads, int level, int same_level) {
     while (thread_received9 < threads);
 
     readCharDev(read_string, "/dev/tsdev_210");
+
+    // if(same_level == 0) sleep(1);
 
     if (tag_ctl((int) tag, AWAKE_ALL) == -1) {
         perror("chrdev_waiting_test9: errore nella REMOVE_TAG");

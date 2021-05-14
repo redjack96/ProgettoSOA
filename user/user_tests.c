@@ -81,6 +81,7 @@ void all_tests() {
 int main() {
 
     printf("user=%d, effective user = %d\n", getuid(), geteuid());
+
     all_tests();
     // chrdev_waiting_test9(MAX_LEVELS*2, 15,1);
 

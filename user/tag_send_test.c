@@ -10,11 +10,11 @@
 #include <sys/ipc.h>
 #include <fcntl.h>
 #include <pthread.h>
-#include <syscall.h>
 #include "tag_send_test.h"
 
 #define OK 1
 #define NOT_OK 0
+#define GETTID 186
 char *semaphoreName = "sharedProcessSemaphore";
 
 static int thread_received3 = 0;
@@ -185,7 +185,7 @@ void *sender_thread3(void *level) {
 
     long ret = tag_send(33, the_level, messaggio, 30);
     if (ret < 0) {
-        printf("Errore nel thread sender %ld", (long) syscall(__NR_gettid));
+        printf("Errore nel thread sender %ld", (long) syscall(GETTID));
         return (void *) NOT_OK;
     }
     return (void *) OK;
@@ -204,14 +204,14 @@ void *receiver_thread3(void *level) {
     __sync_fetch_and_add(&thread_received3, 1);
     long ret = tag_receive(33, the_level, messaggio, 30);
     if (ret < 0) {
-        printf("Errore nel thread receiver %ld", (long) syscall(__NR_gettid));
+        printf("Errore nel thread receiver %ld", (long) syscall(GETTID));
         return (void *) NOT_OK;
     }
 
     char messaggio_expected[30];
     sprintf(messaggio_expected, "Messaggio per il livello %d", the_level);
     if (strncmp(messaggio_expected, messaggio, strlen(messaggio)) != 0) {
-        printf("Errore:thread %ld ha ricevuto \"%s\", ma doveva ricevere \"%s\"", (long) syscall(__NR_gettid), messaggio,
+        printf("Errore:thread %ld ha ricevuto \"%s\", ma doveva ricevere \"%s\"", (long) syscall(GETTID), messaggio,
                messaggio_expected);
         return (void *) NOT_OK;
     }
@@ -304,7 +304,7 @@ void *receiver_thread4(void *ignored) {
     __sync_fetch_and_add(&thread_received4, 1);
     long ret = tag_receive(44, 0, messaggio, 30); // livello 0
     if (ret < 0) {
-        printf("Errore nel thread receiver %ld", (long) syscall(__NR_gettid));
+        printf("Errore nel thread receiver %ld", (long) syscall(GETTID));
         return (void *) NOT_OK;
     }
 
