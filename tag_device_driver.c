@@ -480,6 +480,7 @@ int update_chrdev(int tag_minor, int level) {
     tag_service *ts;
     char waiting[10];
     char *temp_buffer;
+    size_t content_size;
     int delimiters_found;
     unsigned long waiting_n;
     int before_token; // Posizione del terzo \t del livello 'level'
@@ -496,7 +497,8 @@ int update_chrdev(int tag_minor, int level) {
     // TODO : TESTARE al primo livello, in mezzo, all'ultimo livello e un numero di thread a due cifre
     // Sincronizzo solo chi scrive nella struttura dati (tag_receive (fuori dalla RCU) e tag_get)
     mutex_lock(&dm->device_lock[ts->tag]);
-    memcpy(temp_buffer, dm->content[ts->tag], strlen(dm->content[ts->tag]));
+    content_size = strlen(dm->content[ts->tag]);
+    memcpy(temp_buffer, dm->content[ts->tag], content_size);
 
 
     // Suddividi la stringa in tre parti e poi uniscile:
@@ -516,8 +518,8 @@ int update_chrdev(int tag_minor, int level) {
         }
     }
 
-    after_string = kmalloc(sizeof(char) * BUFSIZE / 4, GFP_ATOMIC);
-    strncpy(after_string, temp_buffer + i, strlen(temp_buffer));
+    after_string = kmalloc(sizeof(char) * BUFSIZE / 2, GFP_ATOMIC);
+    strncpy(after_string, temp_buffer + i, content_size - i + 1);
 
     // Finche' non arrivo al primo tab (da destra), oppure i == 0
     while (ch != '\t' && i > 0) {
@@ -526,16 +528,17 @@ int update_chrdev(int tag_minor, int level) {
     }
     before_token = i + 1; // vado al carattere successivo a \t (il numero di thread in ricezione)
 
-    before_string = kmalloc(sizeof(char) * before_token+1, GFP_ATOMIC);
+    before_string = kmalloc(sizeof(char) * before_token + 1, GFP_ATOMIC);
+    // strncpy deve copiare esattamente [before_token] caratteri e non di piu'. Dopo e' necessario aggiungere il terminatore.
     strncpy(before_string, temp_buffer, before_token);
     before_string[before_token] = 0;
 
 
     final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
-    strncat(final_string, before_string, BUFSIZE / 4);
+    strncat(final_string, before_string, BUFSIZE / 2);
     sprintf(waiting, "%lu", waiting_n); // spero ci sia \0
-    strncat(final_string, waiting, BUFSIZE / 4);
-    strncat(final_string, after_string, BUFSIZE / 4);
+    strncat(final_string, waiting, BUFSIZE / 2);
+    strncat(final_string, after_string, BUFSIZE / 2);
 
 
     kfree(dm->content[ts->tag]);
@@ -543,10 +546,13 @@ int update_chrdev(int tag_minor, int level) {
     // assegno al content il mio buffer temporaneo con memory barriers
     rcu_assign_pointer(dm->content[ts->tag], final_string);
     mutex_unlock(&dm->device_lock[ts->tag]);
-    printk("%s: before_token = %d, before_string:\n%s after_string:\n%s",
-           MODNAME, before_token, before_string, after_string);
-    kfree(after_string);
+    printk("%s: before_token = %d, before_string:\n%s\nnumero thread in attesa: %s, after_string:\n%s",
+           MODNAME, before_token, before_string, waiting, after_string);
+    // After string viene
     kfree(before_string);
+    kfree(after_string);
+    kfree(temp_buffer); // elimina anche after_string
+
     return ret;
 }
 

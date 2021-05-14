@@ -81,8 +81,8 @@ void all_tests() {
 int main() {
 
     printf("user=%d, effective user = %d\n", getuid(), geteuid());
-    // all_tests();
-    chrdev_10_or_more_waiting_test9(MAX_LEVELS, -1,0);
+    all_tests();
+    // chrdev_10_or_more_waiting_test9(MAX_LEVELS, 15,1);
 
 #define CHECK_DEVICE 0
 #if (CHECK_DEVICE == 1)
