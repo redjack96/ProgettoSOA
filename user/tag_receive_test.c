@@ -26,7 +26,7 @@ static int thread_received9 = 0;
 
 void *thread_receiver_test1(void *tag) {
     long ret;
-    char *buffer = malloc(sizeof(char) * MAX_MESSAGE_SIZE);
+    char buffer[10];
 
     __sync_fetch_and_add(&thread_received1, 1);
     ret = tag_receive((int) (long) tag, 4, buffer, 500);
@@ -42,7 +42,7 @@ void *thread_receiver_test1(void *tag) {
 
 void *thread_function_test2(void *tag) {
     long ret;
-    char *buffer = malloc(sizeof(char) * MAX_MESSAGE_SIZE);
+    char buffer[4096];
 
     __sync_fetch_and_add(&thread_received2, 1);
     ret = tag_receive((int) (long) tag, 0, buffer, 500);
@@ -58,7 +58,6 @@ void *thread_function_test2(void *tag) {
         printf("Messaggio ricevuto ERRATO: %s\n", buffer);
         return (void *) NOT_OK;
     }
-
     return (void *) OK;
 }
 
@@ -75,7 +74,7 @@ typedef struct the_level_data {
  */
 void *thread_function_test3(void *data) {
     long ret;
-    char *buffer = malloc(sizeof(char) * MAX_MESSAGE_SIZE);
+    char buffer[64];
     tag_service_data *my_data = data;
 
     __sync_fetch_and_add(&thread_received3, 1);
@@ -91,9 +90,13 @@ void *thread_function_test3(void *data) {
 
     if (strcmp(my_data->expected_message, buffer) != 0) {
         printf("Messaggio ricevuto ERRATO: %s\n", buffer);
+        free(my_data->expected_message);
+        free(my_data);
         return (void *) NOT_OK;
     }
 
+    free(my_data->expected_message);
+    free(my_data);
     return (void *) OK;
 }
 
@@ -104,7 +107,7 @@ void *thread_function_test3(void *data) {
  */
 void *thread_function_test4(void *data) {
     long ret;
-    char *buffer = malloc(sizeof(char) * MAX_MESSAGE_SIZE);
+    char buffer[32];
 
     // la riutilizzo, ma in realta' stavolta cambia il tag!!
     tag_service_data *tagData = (tag_service_data *) data;
@@ -118,15 +121,20 @@ void *thread_function_test4(void *data) {
         char messaggio[100];
         sprintf(messaggio, "multiple_receive_same_level_test2: Errore di ricezione nel thread %d", getpid());
         perror(messaggio);
+        free(((tag_service_data *) data)->expected_message);
+        free((tag_service_data *) data);
         return (void *) NOT_OK;
     }
 
 
     if (strcmp(tagData->expected_message, buffer) != 0) {
         printf("Messaggio ricevuto ERRATO: %s\n", buffer);
+        free(((tag_service_data *) data)->expected_message);
+        free((tag_service_data *) data);
         return (void *) NOT_OK;
     }
-
+    free(((tag_service_data *) data)->expected_message);
+    free((tag_service_data *) data);
     return (void *) OK;
 }
 
@@ -288,7 +296,7 @@ int multiple_receive_different_level_test3(int thread_number) {
     }
 
     for (i = 0; i < thread_number; i++) {
-        char *message = malloc(sizeof(char) * 40);
+        char message[40];
         sprintf(message, "Messaggio per il livello %d", i % MAX_LEVELS);
         tag_service_data *input = (tag_service_data *) malloc(sizeof(tag_service_data));
         input->tag = (int) tag;
@@ -304,7 +312,7 @@ int multiple_receive_different_level_test3(int thread_number) {
 
 
     for (k = 0; k < thread_number; k++) {
-        char *message = malloc(sizeof(char) * 40);
+        char message[40];
         sprintf(message, "Messaggio per il livello %d", k % MAX_LEVELS);
         ret = tag_send((int) tag, k % MAX_LEVELS, message, strlen(message));
         if (ret < 0) {
@@ -374,7 +382,7 @@ int multiple_receive_different_tag_same_level_test4(int thread_number) {
 
     // 2. Creo [thread_number] thread che vanno in ricezione ognuno su un tag diverso, ma allo stesso livello
     for (i = 0; i < thread_number; i++) {
-        char *message = malloc(sizeof(char) * 40);
+        char message[40];
         sprintf(message, "Messaggio per il tag %ld", tag[i]);
         tag_service_data *input = (tag_service_data *) malloc(sizeof(tag_service_data));
         input->tag = (int) tag[i];
@@ -390,7 +398,7 @@ int multiple_receive_different_tag_same_level_test4(int thread_number) {
 
     // 4. Eseguo [thread_number] volte tag_send, su tutti i tag.
     for (k = 0; k < thread_number; k++) {
-        char *message = malloc(sizeof(char) * 40);
+        char message[40];
         sprintf(message, "Messaggio per il tag %ld", tag[k]);
         ret = tag_send((int) tag[k], 0, message, strlen(message));
         if (ret < 0) {
@@ -439,7 +447,7 @@ int multiple_receive_different_tag_same_level_test4(int thread_number) {
 
 void *thread_receiver5(void *tag) {
     long ret;
-    char *buffer = malloc(sizeof(char) * MAX_MESSAGE_SIZE);
+    char buffer[500];
 
     // printf("Qui thread %d\n", (int) (long) tag);
 
@@ -471,9 +479,8 @@ void *thread_receiver5(void *tag) {
  */
 int readCharDev(char *returned, const char *path) {
     FILE *f;
-    int retry = 0;
-    /* Il seguente ciclo serve per aspettare che i permessi del char device siano effettivamente cambiati */
 
+    /* Il seguente ciclo serve per aspettare che i permessi del char device siano effettivamente cambiati */
     while (access(path, R_OK) == -1);
 
     f = fopen(path, "r");
@@ -780,7 +787,7 @@ void *read_chrdev_thread(void *i) {
     char *chrdev_content;
     char path[20];
     AUDIT printf("Thread lettore %ld\n", (long) i);
-    chrdev_content = malloc(sizeof(char) * 4096);
+    chrdev_content = malloc(sizeof(char) * 4096); // FREED
     if (!chrdev_content) {
         printf("Errore nella malloc nel thread ");
         return NOT_OK;
@@ -910,7 +917,7 @@ void *waiting_thread(void *level) {
     __sync_fetch_and_add(&thread_received9, 1);
 
     if (tag_receive(tag, (int) (long) level, buff, 10) == -1 && errno != EINTR) {
-        perror("chrdev_10_or_more_waiting_test9 [THREAD FIGLIO]: errore nella tag_receive");
+        perror("chrdev_waiting_test9 [THREAD FIGLIO]: errore nella tag_receive");
         return NOT_OK;
     }
 
@@ -921,7 +928,7 @@ void *waiting_thread(void *level) {
  * Fa attendere n thread in un singolo livello e legge il contenuto del buffer, verificando che sia corretto.
  * @return
  */
-int chrdev_10_or_more_waiting_test9(int threads, int level, int same_level) {
+int chrdev_waiting_test9(int threads, int level, int same_level) {
     long tag;
     pthread_t tid[threads];
     void *thread_return[threads];
@@ -929,8 +936,8 @@ int chrdev_10_or_more_waiting_test9(int threads, int level, int same_level) {
     key = 210;
     int ok = 1;
     int i;
-    char *correct_string = malloc(sizeof(char) * 4096);
-    char *read_string = malloc(sizeof(char) * 4096);
+    char correct_string[1024];
+    char read_string[1024];
 
     char *header = "KEY\tEUID\tLEVEL\t#THREADS\n";
     char line[64];
@@ -938,7 +945,7 @@ int chrdev_10_or_more_waiting_test9(int threads, int level, int same_level) {
     thread_received9 = 0;
 
     if ((tag = tag_get(key, CREATE_TAG, EVERYONE)) == -1) {
-        perror("chrdev_10_or_more_waiting_test9: errore nella tag_get");
+        perror("chrdev_waiting_test9: errore nella tag_get");
         FAILURE;
     }
 
@@ -962,7 +969,7 @@ int chrdev_10_or_more_waiting_test9(int threads, int level, int same_level) {
     readCharDev(read_string, "/dev/tsdev_210");
 
     if (tag_ctl((int) tag, AWAKE_ALL) == -1) {
-        perror("chrdev_10_or_more_waiting_test9: errore nella REMOVE_TAG");
+        perror("chrdev_waiting_test9: errore nella REMOVE_TAG");
         FAILURE;
     }
 
@@ -972,15 +979,15 @@ int chrdev_10_or_more_waiting_test9(int threads, int level, int same_level) {
     }
 
     if (tag_ctl((int) tag, REMOVE_TAG) == -1) {
-        perror("chrdev_10_or_more_waiting_test9: errore nella REMOVE_TAG");
+        perror("chrdev_waiting_test9: errore nella REMOVE_TAG");
         FAILURE;
     }
 
     if (ok && strncmp(correct_string, read_string, strlen(correct_string)) == 0) {
         SUCCESS;
     } else {
-        printf("chrdev_10_or_more_waiting_test9: stringa sbagliata \n%s", read_string);
-        printf("chrdev_10_or_more_waiting_test9: la stringa doveva essere\n%s", correct_string);
+        printf("chrdev_waiting_test9: stringa sbagliata \n%s", read_string);
+        printf("chrdev_waiting_test9: la stringa doveva essere\n%s", correct_string);
         FAILURE;
     }
 

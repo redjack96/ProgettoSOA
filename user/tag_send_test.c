@@ -141,8 +141,7 @@ int send_and_receive_long_message_test2() {
         exit(0);
     } else {
         int status;
-        char *receive_buffer;
-        receive_buffer = malloc(sizeof(char) * size);
+        char receive_buffer[size];
         sem_post(semaphore2);
         // printf("Sono qui(padre)\n");
         res = tag_receive((int) tag, level, receive_buffer, size);
@@ -181,7 +180,7 @@ int send_and_receive_long_message_test2() {
  */
 void *sender_thread3(void *level) {
     int the_level = (int) (long) level;
-    char *messaggio = malloc(sizeof(char) * 30);
+    char messaggio[30];
     sprintf(messaggio, "Messaggio per il livello %d", the_level);
 
     long ret = tag_send(33, the_level, messaggio, 30);
@@ -200,7 +199,7 @@ void *sender_thread3(void *level) {
  */
 void *receiver_thread3(void *level) {
     int the_level = (int) (long) level;
-    char *messaggio = malloc(sizeof(char) * 30);
+    char messaggio[30];
 
     __sync_fetch_and_add(&thread_received3, 1);
     long ret = tag_receive(33, the_level, messaggio, 30);
@@ -209,7 +208,7 @@ void *receiver_thread3(void *level) {
         return (void *) NOT_OK;
     }
 
-    char *messaggio_expected = malloc(sizeof(char) * 30);
+    char messaggio_expected[30];
     sprintf(messaggio_expected, "Messaggio per il livello %d", the_level);
     if (strncmp(messaggio_expected, messaggio, strlen(messaggio)) != 0) {
         printf("Errore:thread %ld ha ricevuto \"%s\", ma doveva ricevere \"%s\"", (long) syscall(__NR_gettid), messaggio,
@@ -281,7 +280,7 @@ int concurrent_send_multilevel_test3() {
  */
 void *sender_thread4(void *delta) {
     int the_difference = (int) (long) delta; // 1 o 2
-    char *messaggio = malloc(sizeof(char) * 30);
+    char messaggio[30];
     sprintf(messaggio, "Messaggio dal sender %d", the_difference);
 
 
@@ -300,7 +299,7 @@ void *sender_thread4(void *delta) {
  * @return
  */
 void *receiver_thread4(void *ignored) {
-    char *messaggio = malloc(sizeof(char) * 30);
+    char messaggio[30];
 
     __sync_fetch_and_add(&thread_received4, 1);
     long ret = tag_receive(44, 0, messaggio, 30); // livello 0
@@ -379,7 +378,7 @@ int concurrent_send_same_level_test4() {
  * @return OK | NOT_OK
  */
 void *zero_message_receiver5(void * tag) {
-    char *messaggio = malloc(sizeof(char) * 30);
+    char messaggio[30];
 
     __sync_fetch_and_add(&thread_received5, 1);
     long ret = tag_receive((int) (long) tag, 5, messaggio, 30); // livello 0

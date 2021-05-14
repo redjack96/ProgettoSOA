@@ -28,7 +28,7 @@ void *thread_funct_awake_test3(void *lev) {
     long level = (long) lev;
     long ret;
     int tag = expected_tag(103);
-    char *buffer = malloc(MAX_MESSAGE_SIZE * sizeof(char));
+    char buffer[10];
 
     __sync_fetch_and_add(&thread_receiving3, 1);
     ret = tag_receive(tag, (int) level, buffer, MAX_MESSAGE_SIZE);
@@ -69,6 +69,7 @@ void *thread_func6(void *input) {
     } else {
         ret = tag_get(106, CREATE_TAG, EVERYONE);
     }
+    free((thread_data *) input);
     return (void *) ret;
 }
 
@@ -120,7 +121,7 @@ int not_owner_test2() {
         seteuid(1001); // <-------- funziona solo se ROOT
         // Provo ad eseguire tutti comandi possibili
         long ret_create, ret_open, ret_send, ret_recv, ret_awake, ret_remove;
-        char *messaggio = malloc(sizeof(char) * 10);
+        char messaggio[10];
         // 1. CREATE
         ret_create = tag_get(key, CREATE_TAG, ONLY_OWNER);
         ret_open = tag_get(key, OPEN_TAG, ONLY_OWNER);
@@ -244,7 +245,7 @@ int failed_remove_waiting_thread_test4() {
             perror("failed_remove_waiting_thread_test4: errore nell'apertura del semaforo, assicurati che i parametri siano corretti es. semaName, O_CREAT, 0666, 0");
             exit(EXIT_FAILURE);
         }
-        char *buffer = malloc(sizeof(char) * 20);
+        char buffer[20];
 
         sem_post(semaphore4);
         // problema se viene deschedulato qui, prima della tag_receive e dopo sem_post...
@@ -356,6 +357,7 @@ int remove_send_create_concurrent_test6(int num_thread) {
     sem_init(&sem6, 0, 0);
 
     for (i = 0; i < num_thread; i++) {
+        // Memoria liberata nel thread
         thread_data *input = (thread_data *) malloc(sizeof(thread_data));
 
         input->mode = i % 3;
