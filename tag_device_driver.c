@@ -535,13 +535,16 @@ int update_chrdev(int tag_minor, int level) {
     strcat(final_string, waiting);
     strcat(final_string, after_string);
 
-    kfree(after_string);
-    kfree(before_string);
+
     kfree(dm->content[ts->tag]);
 
     // assegno al content il mio buffer temporaneo con memory barriers
     rcu_assign_pointer(dm->content[ts->tag], final_string);
     mutex_unlock(&dm->device_lock[ts->tag]);
+    printk("%s: before_token = %d, owner_euid %d, before_string:\n%s after_string:\n%s",
+           MODNAME, before_token, ts->owner_euid, before_string, after_string);
+    kfree(after_string);
+    kfree(before_string);
     return ret;
 }
 
