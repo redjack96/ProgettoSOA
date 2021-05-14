@@ -24,7 +24,7 @@ void ts_destroy_char_device_file(int minor_tag);
 
 void destroy_driver_and_all_devices(void);
 
-void update_chrdev(int tag_minor, int level);
+int update_chrdev(int tag_minor, int level);
 
 
 #endif //TAG_SERVICE_TAG_DEVICE_DRIVER_H

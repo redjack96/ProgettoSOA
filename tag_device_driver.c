@@ -474,13 +474,14 @@ void destroy_driver_and_all_devices(void) {
  *
  * @param tag_minor il tag service/char device a cui cambiare la stringa
  */
-/*int update_chrdev(int tag_minor, int level) {
+int update_chrdev(int tag_minor, int level) {
 
     int i, ret;
     tag_service *ts;
     char waiting[10];
     char *temp_buffer;
     int delimiters_found;
+    unsigned long waiting_n;
     int before_token; // Posizione del terzo \t del livello 'level'
     char ch;
     char *after_string; // Da \n del livello 'level' alla fine
@@ -489,7 +490,7 @@ void destroy_driver_and_all_devices(void) {
     ts = tsm->all_tag_services[tag_minor];
 
     temp_buffer = kmalloc(BUFSIZE * sizeof(char), GFP_KERNEL);
-
+    waiting_n = atomic_read((atomic_t *) &ts->level[level].thread_waiting); // Non vogliamo leggere quando un altro thread sta scrivendo
     ret = 0;
     // TODO : TESTARE al primo livello, in mezzo, all'ultimo livello e un numero di thread a due cifre
     // Sincronizzo solo chi scrive nella struttura dati (tag_receive (fuori dalla RCU) e tag_get)
@@ -530,7 +531,7 @@ void destroy_driver_and_all_devices(void) {
 
     final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
     strcat(final_string, before_string);
-    sprintf(waiting, "%lu", ts->level[level].thread_waiting); // spero ci sia \0
+    sprintf(waiting, "%lu", waiting_n); // spero ci sia \0
     strcat(final_string, waiting);
     strcat(final_string, after_string);
 
@@ -542,9 +543,9 @@ void destroy_driver_and_all_devices(void) {
     rcu_assign_pointer(dm->content[ts->tag], final_string);
     mutex_unlock(&dm->device_lock[ts->tag]);
     return ret;
-}*/
+}
 
-void update_chrdev(int tag_minor, int level) {
+/* void update_chrdev(int tag_minor, int level) {
     tag_service *ts;
     char waiting[10];
     unsigned long waiting_n;
@@ -640,8 +641,8 @@ void update_chrdev(int tag_minor, int level) {
     kfree(after_string);
     // kfree(temp_buffer);
     // kfree(final_string);
-    /*
+    *//*
     // Questo lo posso fare anche dopo...
     kfree(after_string);
-    kfree(before_string);*/
-}
+    kfree(before_string);*//*
+}*/
