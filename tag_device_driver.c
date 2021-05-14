@@ -195,7 +195,7 @@ ssize_t ts_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
 
     tag_service *ts = (tag_service *) filp->private_data;
 
-
+    // Liberato qui sotto, prima di ritornare al chiamante
     ts_status = kmalloc(BUFSIZE * sizeof(char), GFP_KERNEL);
 
     // Copio la stringa da restituire all'utente in ts_status
@@ -335,7 +335,8 @@ int ts_create_char_device_file(int tag_minor) {
         return err;
     }
 
-    /* Se tutto va a buon fine, inizializzo SOLO UNA VOLTA la struttura dati con i contenuti del char device */
+    /* Se tutto va a buon fine, inizializzo SOLO UNA VOLTA la struttura dati con i contenuti del char device.
+     * Liberato in ts_destroy_char_device_file e in update_chrdev*/
     dm->content[tag_minor] = kmalloc(BUFSIZE * sizeof(char), GFP_ATOMIC); // Sto in sezione critica, non voglio dormire
     asm volatile ("mfence");
 
@@ -353,11 +354,6 @@ int ts_create_char_device_file(int tag_minor) {
                  ts->level[i].thread_waiting);
         strncat(dm->content[tag_minor], line, strlen(line));
     }
-    // kfree(dm->content[tag_minor]); // temp_buffer
-
-    // assegno al content il mio buffer temporaneo con memory barriers
-    // dm->content[tag_minor] = temp_buffer; // Ricorda pure mfence
-    // rcu_assign_pointer(dm->content[tag_minor], temp_buffer);
 
     mutex_unlock(&dm->device_lock[tag_minor]);
     return 0;
@@ -394,6 +390,7 @@ int init_device_driver(ts_management *the_tsm) {
 
     tsm = the_tsm;
 
+    // Deallocato in destroy_driver_and_all_devices()
     dm = kmalloc(sizeof(dev_manager), GFP_KERNEL);
 
     /* Alloca una regione di MAX_TAG_SERVICES Minor Numbers (a partire da 0)
@@ -490,11 +487,12 @@ int update_chrdev(int tag_minor, int level) {
     char *final_string;
     ts = tsm->all_tag_services[tag_minor];
 
+    // Deallocato al termine
     temp_buffer = kmalloc(BUFSIZE * sizeof(char), GFP_KERNEL);
-    waiting_n = atomic_read(
-            (atomic_t *) &ts->level[level].thread_waiting); // Non vogliamo leggere quando un altro thread sta scrivendo
+
+    waiting_n = atomic_read((atomic_t *) &ts->level[level].thread_waiting); // Non vogliamo leggere quando un altro thread sta scrivendo
     ret = 0;
-    // TODO : TESTARE al primo livello, in mezzo, all'ultimo livello e un numero di thread a due cifre
+
     // Sincronizzo solo chi scrive nella struttura dati (tag_receive (fuori dalla RCU) e tag_get)
     mutex_lock(&dm->device_lock[ts->tag]);
     content_size = strlen(dm->content[ts->tag]);
@@ -509,8 +507,6 @@ int update_chrdev(int tag_minor, int level) {
     delimiters_found = 0; // numero di delimitatori trovati
     ch = 'a'; // dummy char
 
-    // TODO: possibilmente, arrivare direttamente, senza ciclo while, al punto in cui suddividere la stringa
-
     while (delimiters_found < (level + 2) && ch != '\0') { // +2 perche' escludo l'header
         i++; // l'ultima volta, andiamo a capo
         if ((ch = temp_buffer[i]) == '\n') {
@@ -518,6 +514,7 @@ int update_chrdev(int tag_minor, int level) {
         }
     }
 
+    // Deallocato al termine
     after_string = kmalloc(sizeof(char) * BUFSIZE / 2, GFP_ATOMIC);
     strncpy(after_string, temp_buffer + i, content_size - i + 1);
 
@@ -528,12 +525,13 @@ int update_chrdev(int tag_minor, int level) {
     }
     before_token = i + 1; // vado al carattere successivo a \t (il numero di thread in ricezione)
 
+    // Deallocato al termine
     before_string = kmalloc(sizeof(char) * before_token + 1, GFP_ATOMIC);
     // strncpy deve copiare esattamente [before_token] caratteri e non di piu'. Dopo e' necessario aggiungere il terminatore.
     strncpy(before_string, temp_buffer, before_token);
     before_string[before_token] = 0;
 
-
+    // Deallocato da ts_destroy_char_device_file()
     final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
     strncat(final_string, before_string, BUFSIZE / 2);
     sprintf(waiting, "%lu", waiting_n); // spero ci sia \0

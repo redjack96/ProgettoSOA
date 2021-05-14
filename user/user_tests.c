@@ -10,7 +10,7 @@ void testsuite_tag_get() {
     istantiation_test1(0);
     istantiation_ipc_private_test2();
     multiple_istantiation_ipc_private_test3();
-    no_more_tagservices4();
+    no_more_tagservices4(); // MEMORY LEAK: crea 512 tag services e li lascia lì finché non smonti
     failing_double_instantiation_test5();
     opening_test6();
     SUDO opening_only_owner_test7();
@@ -83,7 +83,6 @@ int main() {
     printf("user=%d, effective user = %d\n", getuid(), geteuid());
 
     all_tests();
-    // chrdev_waiting_test9(MAX_LEVELS*2, 15,1);
 
 #define CHECK_DEVICE 0
 #if (CHECK_DEVICE == 1)

@@ -200,7 +200,7 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
                 return -ENOKEY; // required key not available
             }
 
-            // alloca la memoria per il tag_service (Non bloccante perche' sto in sezione critica)
+            // alloca la memoria per il tag_service (Non bloccante perche' sto in sezione critica). Deallocato allo smontaggio
             ts = kzalloc(sizeof(tag_service), GFP_ATOMIC);
             if (!ts) {
                 mutex_unlock(&tsm.access_lock[tag]);
@@ -220,7 +220,7 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
             ts->owner_uid = UID;
             ts->awake_request = NO;
             ts->tag = tag; // Se l'elemento e' gia' occupato, la tag_get fallisce prima
-            ts->level = kzalloc(sizeof(tag_level) * MAX_LEVELS, GFP_ATOMIC);
+            ts->level = kzalloc(sizeof(tag_level) * MAX_LEVELS, GFP_ATOMIC); // Deallocato allo smontaggio
             if (!ts->level) {
                 mutex_unlock(&tsm.access_lock[tag]);
                 ERR1("Impossibile allocare spazio per i livelli del tag", tag);
@@ -237,7 +237,7 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
                 ts->level[lev].message_ready = NOT_READY;
                 ts->level[lev].size = 0;
                 ts->level[lev].tag = tag;
-                // Alloca tutti i messaggi in anticipo... memoria in più, migliori prestazioni...
+                // Alloca tutti i messaggi in anticipo. Memoria in più, migliori prestazioni. Deallocato allo smontaggio
                 ts->level[lev].message = kzalloc(sizeof(char) * MAX_MESSAGE_SIZE,
                                                  GFP_ATOMIC); // non voglio che sia deschedulato, siamo in sezione critica
                 if (!ts->level[lev].message) {
@@ -712,6 +712,7 @@ int start(void) {
         LOG("Impossibile trovare la sys_call_table");
         return MOUNT_FAILURE;
     }
+    // Deallocato allo smontaggio
     tsm.all_tag_services = kzalloc(sizeof(tag_service) * MAX_TAG_SERVICES, GFP_ATOMIC);
     if (!tsm.all_tag_services) {
         return MOUNT_FAILURE;
@@ -759,10 +760,10 @@ void end(void) {
     for (i = 0; i < MAX_TAG_SERVICES; i++) {
         if (tsm.all_tag_services[i]) {
             for (lev = 0; lev < MAX_LEVELS; lev++) {
-                kfree(tsm.all_tag_services[i]->level[lev].message);
+                kfree(tsm.all_tag_services[i]->level[lev].message); // Dealloco i [MAX_LEVELS] messaggi
             }
-            kfree(tsm.all_tag_services[i]->level);
-            kfree(tsm.all_tag_services[i]);
+            kfree(tsm.all_tag_services[i]->level); // Dealloco il level di ogni tag service
+            kfree(tsm.all_tag_services[i]); // Dealloco il ts
             LOG1("Eliminato tag_service", i);
         }
     }
