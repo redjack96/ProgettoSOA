@@ -467,7 +467,7 @@ void destroy_driver_and_all_devices(void) {
  * - Viene chiamata da tag_get quando crea il tag_service
  * - Viene chiamata da tag_receive quando un thread entra o esce dall'attesa.
  *
- * FIX: l'unica cosa che cambia e' il numero di thread in ricezione nel livello specificato
+ * FIX: Ora l'unica cosa che cambia e' il numero di thread in ricezione nel livello specificato e non tutte le righe
  *
  * @param tag_minor il tag service/char device a cui cambiare la stringa
  */
@@ -485,7 +485,15 @@ int update_chrdev(int tag_minor, int level) {
     char *after_string; // Da \n del livello 'level' alla fine
     char *before_string;
     char *final_string;
+
+    if(tag_minor > MAX_TAG_SERVICES || tag_minor < -1 || level > MAX_LEVELS || level < 0)
+        return -1;
+
+
     ts = tsm->all_tag_services[tag_minor];
+
+    if(!ts)
+        return -1;
 
     // Deallocato al termine
     temp_buffer = kmalloc(BUFSIZE * sizeof(char), GFP_KERNEL);
@@ -553,101 +561,3 @@ int update_chrdev(int tag_minor, int level) {
 
     return ret;
 }
-
-/* void update_chrdev(int tag_minor, int level) {
-    tag_service *ts;
-    char waiting[10];
-    unsigned long waiting_n;
-    int prev_waiting_size;
-    char *temp_buffer;
-    size_t content_size;
-    int before_token; // Posizione del terzo \t del livello 'level'
-    char *after_string; // Da \n del livello 'level' alla fine
-    char *before_string;
-    char *final_string;
-    int size_riga_da_mod;
-    int j, y, i;
-    char ch;
-    int all_thread_numbers_size;
-    int const_full_line;
-    char prev_waiting[10];
-    ts = tsm->all_tag_services[tag_minor];
-
-    temp_buffer = kmalloc(BUFSIZE * sizeof(char), GFP_KERNEL);
-
-    // Sincronizzo solo chi scrive nella struttura dati (tag_receive (fuori dalla RCU) e tag_get)
-    mutex_lock(&dm->device_lock[ts->tag]);
-    content_size = strlen(dm->content[ts->tag]);
-    memcpy(temp_buffer, dm->content[ts->tag], content_size);
-
-
-    // Suddividi la stringa in tre parti e poi uniscile:
-    // Stringa 1: La parte prima dei thread in attesa (fino al terzo \t incluso)
-    // Stringa 2: Il numero di nuovi thread in attesa
-    // Stringa 3: La parte dal \n in poi
-
-    // Numero di caratteri, costante in ogni riga completa, compresi i 3 tab e il \n
-    const_full_line = countCharsOfNumber(ts->key) + countCharsOfNumber(ts->owner_euid) + 4;
-
-    size_riga_da_mod = const_full_line - 1; // escludo il livello, il \n e i thread waiting
-    all_thread_numbers_size = 0;
-    for (y = 0; y < level; y++) { // Conta le cifre dei thread in attesa da 0 a level escluso
-        all_thread_numbers_size += countCharsOfNumber((long) ts->level[y].thread_waiting);
-    }
-
-    // Arriviamo direttamente al risultato finale, senza leggere il buffer (non so quanto mi convenga)
-    before_token = header_size + level * const_full_line + (int) fastSommaDelleCifreDaZeroFinoIncluso(level) +
-                   all_thread_numbers_size + size_riga_da_mod;
-
-
-
-
-    // Stringa 1 - Dall'inizio fino al terzo \t nella riga corrispondente a [level]
-    before_string = kmalloc(sizeof(char) * before_token, GFP_ATOMIC);
-    strncpy(before_string, temp_buffer, before_token);
-
-
-
-    // Stringa 2 - Leggo solo 1-3 caratteri, per ricavare il precedente livello...
-    waiting_n = ts->level[level].thread_waiting;
-    i = before_token;
-    j = 0;
-    while ((ch = temp_buffer[i]) != '\n') { //
-        prev_waiting[j] = ch;
-        i++;
-        j++;
-        if (ch == 0 || j > 10) break;
-    }
-    prev_waiting[j] = '\0';
-
-
-
-    // ricavo il precedente numero di thread in attesa dalla stringa, lo traduco in numero e poi conto i suoi caratteri
-    prev_waiting_size = countCharsOfNumber((long) my_atoi(prev_waiting));
-    sprintf(waiting, "%lu", waiting_n);
-
-    // String 3 - Alla riga corrispondente al livello [level] da \n alla fine.
-    after_string = kmalloc(sizeof(char) * (content_size - before_token - prev_waiting_size + 1), GFP_ATOMIC);
-    strncpy(after_string, temp_buffer + before_token + prev_waiting_size,
-            content_size - before_token - prev_waiting_size + 1);
-
-    final_string = kmalloc(sizeof(char) * BUFSIZE, GFP_ATOMIC);
-    strcat(final_string, before_string);
-    strcat(final_string, waiting);
-    strcat(final_string, after_string);
-
-    kfree(dm->content[ts->tag]);
-
-    // assegno al content il mio buffer temporaneo con memory barriers
-    rcu_assign_pointer(dm->content[ts->tag], final_string);
-    mutex_unlock(&dm->device_lock[ts->tag]);
-
-    // TODO: TOGLI, SOLO PER TROVARE ERRORE
-    printk("%s: before_token = %d, owner_euid %d, prev_waiting: %s prev_waiting_size: %d content_size(%zu) - before_token(%d) - prev_waiting_size(%d) + 1 = %lu final_string: \n%s",
-           MODNAME, before_token, ts->owner_euid, prev_waiting, prev_waiting_size, content_size, before_token,
-           prev_waiting_size, content_size - before_token - prev_waiting_size + 1, final_string);
-    kfree(before_string);
-    kfree(after_string);
-    // kfree(temp_buffer);
-    // kfree(final_string);
-}*/
